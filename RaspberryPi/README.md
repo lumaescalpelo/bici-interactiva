@@ -25,13 +25,7 @@ sudo apt update
 sudo apt install -y python3-flask chromium-browser
 ```
 
-En la ruta `~/bici-interactiva/` pega el archivo `app.py` de este repositorio.
-
-En la ruta `~/bici-interactiva/templates/` pega el archivo `display.html` de este repositorio.
-
-En la ruta `~/bici-interactiva/static/css/` pega el archivo `style.css` de este repositorio.
-
-En la ruta `~/bici-interactiva/static/js/` pega el archivo `display.js` de este repositorio.
+Copia la carpeta `bici-interactiva` que se encuentra en la ruta `~/Documents/GitHub/bici-interactiva/RaspberryPi/bici-interactiva` en el directorio `Home`.
 
 Ejecuta el servidor, dirigete al directorio de la app con el comando `cd ~/bici-interactiva` y ejecuta el comando `python3 app.py`.
 
@@ -41,22 +35,38 @@ Deberías ver algo como:
 Running on http://0.0.0.0:5000
 ```
 
-Ahora abre en la Raspberry http://localhost:5000
+**Para ver el video**
+
+Ahora abre en la Raspberry http://localhost:5000/display
 
 
 Abre Chromium en modo kiosko, en otra terminal ejecuta:
 
 ```
-chromium-browser --kiosk http://localhost:5000
+chromium-browser --kiosk http://localhost:5000/display
 ```
 
 Si tu sistema usa chromium:
 
 ```
-chromium --kiosk http://localhost:5000
+chromium --kiosk http://localhost:5000/display
 ```
 
-Para salir del modo kiosko:
+**Para ingresar el nombre**
+
+Abre Chromium en modo kiosko, en otra terminal ejecuta:
+
+```
+chromium-browser --kiosk http://localhost:5000/control
+```
+
+Si tu sistema usa chromium:
+
+```
+chromium --kiosk http://localhost:5000/control
+```
+
+**Para salir del modo kiosko:**
 
 ```
 Alt + F4
