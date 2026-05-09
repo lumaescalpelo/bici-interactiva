@@ -1,6 +1,10 @@
 from flask import Flask, render_template, request, redirect, jsonify
 import threading
 import time
+import csv
+import re
+from pathlib import Path
+from datetime import datetime, date
 
 import serial
 
@@ -12,18 +16,21 @@ app = Flask(__name__)
 # CONFIGURACIÓN SERIAL
 # =====================================================
 
-# UART físico de Raspberry Pi:
-# GPIO14 TXD / pin 8
-# GPIO15 RXD / pin 10
-#
-# El ESP32 debe mandar:
-# ESP32 TX2 GPIO17 -> Raspberry RXD GPIO15 / pin 10
-# ESP32 GND        -> Raspberry GND
 SERIAL_PORT = "/dev/serial0"
 SERIAL_BAUD = 19200
 
 # Debe coincidir con REPORT_HZ del ESP32
 SAMPLES_PER_SECOND = 10
+
+
+# =====================================================
+# RUTAS DE DATOS
+# =====================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+SESSIONS_DIR = DATA_DIR / "sessions"
+SUMMARY_CSV = DATA_DIR / "sessions_summary.csv"
 
 
 # =====================================================
@@ -44,12 +51,131 @@ state = {
     "last_serial_line": "",
     "last_event": "WAITING",
 
-    "sample_count": 0
+    "sample_count": 0,
+
+    "session_id": "",
+    "session_csv_file": "",
+    "last_summary": None,
 }
 
 state_lock = threading.Lock()
 
 score_accumulator = 0.0
+
+current_session = {
+    "id": "",
+    "participant_name": "",
+    "start_time": None,
+    "end_time": None,
+    "csv_path": None,
+    "csv_file_handle": None,
+    "csv_writer": None,
+    "samples": [],
+}
+
+
+# =====================================================
+# UTILIDADES
+# =====================================================
+
+def ensure_data_dirs():
+    DATA_DIR.mkdir(exist_ok=True)
+    SESSIONS_DIR.mkdir(exist_ok=True)
+
+    if not SUMMARY_CSV.exists():
+        with SUMMARY_CSV.open("w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow([
+                "session_id",
+                "participant_name",
+                "start_time",
+                "end_time",
+                "duration_s",
+                "sample_count",
+                "avg_speed",
+                "max_speed",
+                "avg_smooth",
+                "max_smooth",
+                "live_score",
+                "csv_file",
+            ])
+
+
+def slugify_name(name):
+    clean = name.strip().lower()
+    clean = re.sub(r"[^a-z0-9áéíóúñü]+", "_", clean)
+    clean = clean.strip("_")
+
+    if not clean:
+        clean = "participante"
+
+    return clean[:40]
+
+
+def close_current_csv_safely():
+    file_handle = current_session.get("csv_file_handle")
+
+    if file_handle:
+        try:
+            file_handle.flush()
+            file_handle.close()
+        except Exception:
+            pass
+
+    current_session["csv_file_handle"] = None
+    current_session["csv_writer"] = None
+
+
+# =====================================================
+# RANKING DIARIO
+# =====================================================
+
+def get_today_ranking(limit=10):
+    """
+    Lee sessions_summary.csv completo, pero solo devuelve
+    las sesiones cuyo start_time corresponde al día actual
+    de la Raspberry Pi.
+    """
+    today = date.today().isoformat()
+    rows = []
+
+    if not SUMMARY_CSV.exists():
+        return []
+
+    with SUMMARY_CSV.open("r", newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+
+        for row in reader:
+            start_time = row.get("start_time", "")
+
+            if not start_time.startswith(today):
+                continue
+
+            try:
+                score = int(float(row.get("live_score", 0)))
+                avg_speed = float(row.get("avg_speed", 0))
+                max_speed = float(row.get("max_speed", 0))
+                avg_smooth = float(row.get("avg_smooth", 0))
+                max_smooth = float(row.get("max_smooth", 0))
+                sample_count = int(float(row.get("sample_count", 0)))
+            except ValueError:
+                continue
+
+            rows.append({
+                "participant_name": row.get("participant_name", "PARTICIPANTE"),
+                "score": score,
+                "avg_speed": avg_speed,
+                "max_speed": max_speed,
+                "avg_smooth": avg_smooth,
+                "max_smooth": max_smooth,
+                "sample_count": sample_count,
+                "session_id": row.get("session_id", ""),
+                "start_time": start_time,
+            })
+
+    rows.sort(key=lambda item: item["score"], reverse=True)
+
+    return rows[:limit]
 
 
 # =====================================================
@@ -71,6 +197,8 @@ def control():
     with state_lock:
         local_state = dict(state)
 
+    ranking = get_today_ranking(limit=10)
+
     return render_template(
         "control.html",
         participant_name=local_state["participant_name"],
@@ -83,13 +211,28 @@ def control():
         speed_smooth=local_state["speed_smooth"],
         score=local_state["score"],
         sample_count=local_state["sample_count"],
+        ranking=ranking,
+        ranking_date=date.today().isoformat(),
     )
 
 
 @app.route("/api/state")
 def api_state():
     with state_lock:
-        return jsonify(dict(state))
+        local_state = dict(state)
+
+    local_state["ranking"] = get_today_ranking(limit=10)
+    local_state["ranking_date"] = date.today().isoformat()
+
+    return jsonify(local_state)
+
+
+@app.route("/api/ranking")
+def api_ranking():
+    return jsonify({
+        "date": date.today().isoformat(),
+        "ranking": get_today_ranking(limit=10)
+    })
 
 
 @app.route("/api/name", methods=["POST"])
@@ -100,12 +243,158 @@ def api_name():
         name = "PARTICIPANTE"
 
     with state_lock:
-        # Evita cambiar nombre a media prueba.
-        # Porque siempre hay alguien dispuesto a romper la lógica por deporte.
         if not state["game_active"]:
             state["participant_name"] = name
 
     return redirect("/control")
+
+
+# =====================================================
+# SESIONES CSV
+# =====================================================
+
+def open_session_csv(participant_name):
+    start_time = datetime.now()
+    slug_name = slugify_name(participant_name)
+
+    session_id = f"{start_time.strftime('%Y%m%d_%H%M%S')}_{slug_name}"
+    csv_path = SESSIONS_DIR / f"{session_id}.csv"
+
+    file_handle = csv_path.open("w", newline="", encoding="utf-8")
+    writer = csv.writer(file_handle)
+
+    writer.writerow([
+        "timestamp_iso",
+        "elapsed_ms",
+        "participant_name",
+        "speed_kmh",
+        "speed_smooth_kmh",
+        "live_score",
+    ])
+
+    current_session["id"] = session_id
+    current_session["participant_name"] = participant_name
+    current_session["start_time"] = start_time
+    current_session["end_time"] = None
+    current_session["csv_path"] = csv_path
+    current_session["csv_file_handle"] = file_handle
+    current_session["csv_writer"] = writer
+    current_session["samples"] = []
+
+    return session_id, csv_path
+
+
+def write_session_sample(speed, speed_smooth, live_score):
+    writer = current_session.get("csv_writer")
+
+    if writer is None:
+        return
+
+    start_time = current_session.get("start_time")
+    if start_time is None:
+        return
+
+    now = datetime.now()
+    elapsed_ms = int((now - start_time).total_seconds() * 1000)
+
+    participant_name = current_session.get("participant_name", "PARTICIPANTE")
+
+    writer.writerow([
+        now.isoformat(),
+        elapsed_ms,
+        participant_name,
+        f"{speed:.3f}",
+        f"{speed_smooth:.3f}",
+        live_score,
+    ])
+
+    current_session["csv_file_handle"].flush()
+
+    current_session["samples"].append({
+        "timestamp": now,
+        "elapsed_ms": elapsed_ms,
+        "speed": speed,
+        "speed_smooth": speed_smooth,
+        "live_score": live_score,
+    })
+
+
+def summarize_current_session(final_score):
+    samples = current_session.get("samples", [])
+
+    start_time = current_session.get("start_time")
+    end_time = datetime.now()
+    current_session["end_time"] = end_time
+
+    if start_time:
+        duration_s = (end_time - start_time).total_seconds()
+    else:
+        duration_s = 0.0
+
+    if samples:
+        speeds = [sample["speed"] for sample in samples]
+        smooth_speeds = [sample["speed_smooth"] for sample in samples]
+
+        avg_speed = sum(speeds) / len(speeds)
+        max_speed = max(speeds)
+
+        avg_smooth = sum(smooth_speeds) / len(smooth_speeds)
+        max_smooth = max(smooth_speeds)
+    else:
+        avg_speed = 0.0
+        max_speed = 0.0
+        avg_smooth = 0.0
+        max_smooth = 0.0
+
+    csv_path = current_session.get("csv_path")
+    csv_file = str(csv_path.relative_to(BASE_DIR)) if csv_path else ""
+
+    summary = {
+        "session_id": current_session.get("id", ""),
+        "participant_name": current_session.get("participant_name", "PARTICIPANTE"),
+        "start_time": start_time.isoformat() if start_time else "",
+        "end_time": end_time.isoformat(),
+        "duration_s": duration_s,
+        "sample_count": len(samples),
+        "avg_speed": avg_speed,
+        "max_speed": max_speed,
+        "avg_smooth": avg_smooth,
+        "max_smooth": max_smooth,
+        "live_score": final_score,
+        "csv_file": csv_file,
+    }
+
+    return summary
+
+
+def append_summary_csv(summary):
+    with SUMMARY_CSV.open("a", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerow([
+            summary["session_id"],
+            summary["participant_name"],
+            summary["start_time"],
+            summary["end_time"],
+            f"{summary['duration_s']:.3f}",
+            summary["sample_count"],
+            f"{summary['avg_speed']:.3f}",
+            f"{summary['max_speed']:.3f}",
+            f"{summary['avg_smooth']:.3f}",
+            f"{summary['max_smooth']:.3f}",
+            summary["live_score"],
+            summary["csv_file"],
+        ])
+
+
+def reset_current_session():
+    current_session["id"] = ""
+    current_session["participant_name"] = ""
+    current_session["start_time"] = None
+    current_session["end_time"] = None
+    current_session["csv_path"] = None
+    current_session["samples"] = []
+
+    close_current_csv_safely()
 
 
 # =====================================================
@@ -114,6 +403,11 @@ def api_name():
 
 def start_game():
     global score_accumulator
+
+    with state_lock:
+        participant_name = state["participant_name"]
+
+    session_id, csv_path = open_session_csv(participant_name)
 
     with state_lock:
         score_accumulator = 0.0
@@ -126,14 +420,41 @@ def start_game():
         state["game_active"] = True
         state["last_event"] = "START"
 
+        state["session_id"] = session_id
+        state["session_csv_file"] = str(csv_path.relative_to(BASE_DIR))
+        state["last_summary"] = None
+
+    print(f"[SESSION START] {session_id}")
+
 
 def end_game():
+    with state_lock:
+        final_score = state["score"]
+
+    summary = summarize_current_session(final_score)
+    append_summary_csv(summary)
+    close_current_csv_safely()
+
     with state_lock:
         state["speed"] = 0.0
         state["speed_smooth"] = 0.0
 
         state["game_active"] = False
         state["last_event"] = "END"
+
+        state["last_summary"] = summary
+
+    print(f"[SESSION END] {summary['session_id']}")
+    print(
+        "[SUMMARY] "
+        f"name={summary['participant_name']} "
+        f"score={summary['live_score']} "
+        f"avg={summary['avg_smooth']:.2f} "
+        f"max={summary['max_smooth']:.2f} "
+        f"samples={summary['sample_count']}"
+    )
+
+    reset_current_session()
 
 
 def update_speed(speed, speed_smooth):
@@ -147,18 +468,14 @@ def update_speed(speed, speed_smooth):
         state["speed_smooth"] = speed_smooth
         state["sample_count"] += 1
 
-        # Puntaje provisional:
-        # integra velocidad suavizada en el tiempo.
-        #
-        # Ejemplo:
-        # 20 km/h a 10 Hz suma 2.0 por muestra.
-        #
-        # Multiplicamos por 10 para que visualmente crezca mejor.
-        # Luego lo refinamos para premiar constancia.
         score_accumulator += speed_smooth / SAMPLES_PER_SECOND
         state["score"] = int(score_accumulator * 10)
 
+        live_score = state["score"]
+
         state["last_event"] = "DATA"
+
+    write_session_sample(speed, speed_smooth, live_score)
 
 
 # =====================================================
@@ -175,23 +492,30 @@ def parse_serial_line(line):
         state["last_serial_line"] = line
 
     if line == "START":
+        with state_lock:
+            already_active = state["game_active"]
+
+        if already_active:
+            end_game()
+
         start_game()
         return
 
     if line == "END":
-        end_game()
+        with state_lock:
+            active = state["game_active"]
+
+        if active:
+            end_game()
+
         return
 
-    # Ignora encabezado
     if line.startswith("speed_kmh"):
         return
 
-    # Ignora comentarios, por si llegaran por error
     if line.startswith("#"):
         return
 
-    # Formato esperado:
-    # speed_kmh,speed_smooth_kmh
     parts = line.split(",")
 
     if len(parts) != 2:
@@ -256,6 +580,8 @@ def serial_worker():
 # =====================================================
 
 if __name__ == "__main__":
+    ensure_data_dirs()
+
     thread = threading.Thread(target=serial_worker, daemon=True)
     thread.start()
 
