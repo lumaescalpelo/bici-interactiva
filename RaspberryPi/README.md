@@ -26,8 +26,11 @@ sudo apt install -y python3-flask chromium-browser
 ```
 
 En la ruta `~/bici-interactiva/` pega el archivo `app.py` de este repositorio.
+
 En la ruta `~/bici-interactiva/templates/` pega el archivo `display.html` de este repositorio.
+
 En la ruta `~/bici-interactiva/static/css/` pega el archivo `style.css` de este repositorio.
+
 En la ruta `~/bici-interactiva/static/js/` pega el archivo `display.js` de este repositorio.
 
 Ejecuta el servidor, dirigete al directorio de la app con el comando `cd ~/bici-interactiva` y ejecuta el comando `python3 app.py`.
