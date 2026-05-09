@@ -1,0 +1,101 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: black;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/*
+  Esta capa representa la salida completa HDMI.
+
+  Si tu Raspberry está en 640x1024, #screen ocupa toda la pantalla.
+
+  Si tu Raspberry está en 1920x1080, #screen también ocupa toda la pantalla,
+  pero #stage se centra dentro.
+*/
+#screen {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: black;
+}
+
+/*
+  Esta es tu matriz LED real:
+  5 paneles x 8 paneles
+  640 x 1024 px
+*/
+#stage {
+  position: absolute;
+  width: 640px;
+  height: 1024px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: black;
+  overflow: hidden;
+}
+
+/*
+  El video ocupa exactamente la matriz.
+*/
+#mainVideo {
+  position: absolute;
+  width: 640px;
+  height: 1024px;
+  left: 0;
+  top: 0;
+  object-fit: cover;
+}
+
+/*
+  Capa de interfaz encima del video.
+*/
+#overlay {
+  position: absolute;
+  inset: 0;
+  color: white;
+  text-shadow: 0 0 8px black;
+  pointer-events: none;
+}
+
+#name {
+  position: absolute;
+  top: 40px;
+  left: 40px;
+  font-size: 42px;
+  font-weight: bold;
+}
+
+#speed {
+  position: absolute;
+  top: 120px;
+  left: 40px;
+  font-size: 54px;
+  font-weight: bold;
+}
+
+#score {
+  position: absolute;
+  top: 200px;
+  left: 40px;
+  font-size: 46px;
+  font-weight: bold;
+}
+
+#hint {
+  position: absolute;
+  bottom: 40px;
+  left: 40px;
+  right: 40px;
+  font-size: 28px;
+  opacity: 0.75;
+}
