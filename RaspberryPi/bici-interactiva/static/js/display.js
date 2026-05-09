@@ -1,25 +1,37 @@
 const body = document.body;
 
 const video = document.getElementById("mainVideo");
-const speed = document.getElementById("speed");
-const score = document.getElementById("score");
-const nameLabel = document.getElementById("name");
-const rankingList = document.getElementById("rankingList");
-const rankPosition = document.getElementById("rankPosition");
+
+// GAME UI
+const gameName = document.getElementById("gameName");
+const gameSpeed = document.getElementById("gameSpeed");
+const gameScore = document.getElementById("gameScore");
+const gameRankingList = document.getElementById("gameRankingList");
+const gameRankPosition = document.getElementById("gameRankPosition");
+
+// RESULT UI
+const resultName = document.getElementById("resultName");
+const resultRank = document.getElementById("resultRank");
+const resultRankingList = document.getElementById("resultRankingList");
 
 const IDLE_VIDEO = "/static/videos/idle.mp4";
 const GAME_VIDEO = "/static/videos/game.mp4";
 
-let localGameActive = false;
-let serverGameActive = false;
+let currentMode = "idle";
+
+
+function formatScore(value) {
+  return String(Number(value || 0)).padStart(4, "0");
+}
 
 
 function playIdle() {
-  localGameActive = false;
+  currentMode = "idle";
 
-  body.classList.remove("game-mode");
+  body.classList.remove("game-mode", "result-mode");
   body.classList.add("idle-mode");
 
+  video.style.display = "block";
   video.loop = true;
 
   if (!video.src.endsWith(IDLE_VIDEO)) {
@@ -33,11 +45,12 @@ function playIdle() {
 
 
 function playGame() {
-  localGameActive = true;
+  currentMode = "game";
 
-  body.classList.remove("idle-mode");
+  body.classList.remove("idle-mode", "result-mode");
   body.classList.add("game-mode");
 
+  video.style.display = "block";
   video.loop = false;
 
   if (!video.src.endsWith(GAME_VIDEO)) {
@@ -52,20 +65,27 @@ function playGame() {
 }
 
 
-function formatScore(value) {
-  return String(Number(value || 0)).padStart(4, "0");
+function playResult() {
+  currentMode = "result";
+
+  body.classList.remove("idle-mode", "game-mode");
+  body.classList.add("result-mode");
+
+  // ocultamos video para que se vea la imagen de fondo del result overlay
+  video.pause();
+  video.style.display = "none";
 }
 
 
-function renderRanking(ranking, currentRank) {
-  rankingList.innerHTML = "";
+function renderGameRanking(ranking, currentRank) {
+  gameRankingList.innerHTML = "";
 
   if (!Array.isArray(ranking) || ranking.length === 0) {
     const item = document.createElement("li");
     item.textContent = "Sin registros";
-    rankingList.appendChild(item);
+    gameRankingList.appendChild(item);
 
-    rankPosition.textContent = "--";
+    gameRankPosition.textContent = "--";
     return;
   }
 
@@ -92,14 +112,56 @@ function renderRanking(ranking, currentRank) {
       item.classList.add("current-player");
     }
 
-    rankingList.appendChild(item);
+    gameRankingList.appendChild(item);
   });
 
   if (currentRank !== null && currentRank !== undefined) {
-    rankPosition.textContent = `#${currentRank}`;
+    gameRankPosition.textContent = `#${currentRank}`;
   } else {
-    rankPosition.textContent = "--";
+    gameRankPosition.textContent = "--";
   }
+}
+
+
+function renderResultPanel(panel) {
+  resultRankingList.innerHTML = "";
+
+  if (!panel) {
+    resultName.textContent = "PARTICIPANTE";
+    resultRank.textContent = "--";
+    return;
+  }
+
+  resultName.textContent = panel.participant_name || "PARTICIPANTE";
+  resultRank.textContent = panel.rank ? `#${panel.rank}` : "--";
+
+  const entries = panel.entries || [];
+
+  entries.forEach((entry) => {
+    const item = document.createElement("li");
+
+    const rank = document.createElement("span");
+    rank.className = "result-ranking-rank";
+    rank.textContent = `${entry.rank}.`;
+
+    const name = document.createElement("span");
+    name.className = "result-ranking-name";
+    name.textContent = entry.participant_name || "PARTICIPANTE";
+
+    const points = document.createElement("span");
+    points.className = "result-ranking-score";
+    points.textContent = `${formatScore(entry.score)} pts`;
+
+    item.appendChild(rank);
+    item.appendChild(name);
+    item.appendChild(points);
+
+    if (entry.is_current) {
+      item.classList.add("current-player");
+    }
+
+    resultRankingList.appendChild(item);
+  });
 }
 
 
@@ -111,23 +173,22 @@ async function updateStateFromServer() {
 
     const data = await response.json();
 
-    nameLabel.textContent = data.participant_name || "PARTICIPANTE";
+    // Datos de game
+    gameName.textContent = data.participant_name || "PARTICIPANTE";
+    gameSpeed.textContent = `${Number(data.speed || 0).toFixed(1)} km/h`;
+    gameScore.textContent = `${formatScore(data.score || 0)} pts`;
+    renderGameRanking(data.ranking || [], data.current_rank);
 
-    const speedValue = Number(data.speed || 0);
-    const scoreValue = Number(data.score || 0);
+    // Datos de result
+    renderResultPanel(data.last_result_panel);
 
-    speed.textContent = `${speedValue.toFixed(1)} km/h`;
-    score.textContent = `${formatScore(scoreValue)} pts`;
+    const serverMode = data.screen_mode || "idle";
 
-    renderRanking(data.ranking || [], data.current_rank);
-
-    serverGameActive = Boolean(data.game_active);
-
-    if (serverGameActive && !localGameActive) {
+    if (serverMode === "game" && currentMode !== "game") {
       playGame();
-    }
-
-    if (!serverGameActive && localGameActive) {
+    } else if (serverMode === "result" && currentMode !== "result") {
+      playResult();
+    } else if (serverMode === "idle" && currentMode !== "idle") {
       playIdle();
     }
 
@@ -135,24 +196,6 @@ async function updateStateFromServer() {
     console.error("No se pudo leer /api/state", error);
   }
 }
-
-
-video.addEventListener("ended", () => {
-  if (localGameActive && !serverGameActive) {
-    playIdle();
-  }
-});
-
-
-// Tecla de prueba local.
-// Ya que el serial funciona, puedes dejarla comentada.
-/*
-document.addEventListener("keydown", (event) => {
-  if (event.code === "Space" && !localGameActive) {
-    playGame();
-  }
-});
-*/
 
 
 setInterval(updateStateFromServer, 100);

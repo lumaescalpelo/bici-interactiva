@@ -20,6 +20,9 @@ SERIAL_PORT = "/dev/serial0"
 SERIAL_BAUD = 19200
 SAMPLES_PER_SECOND = 10
 
+# Tiempo que se mostrará la pantalla de resultados
+RESULT_SCREEN_DURATION_S = 12
+
 
 # =====================================================
 # RUTAS DE DATOS
@@ -54,6 +57,15 @@ state = {
     "session_id": "",
     "session_csv_file": "",
     "last_summary": None,
+
+    # idle | game | result
+    "screen_mode": "idle",
+
+    # marca temporal para salir de result automáticamente
+    "result_started_at": None,
+
+    # panel de resultado para la pantalla final
+    "last_result_panel": None,
 }
 
 state_lock = threading.Lock()
@@ -124,15 +136,32 @@ def close_current_csv_safely():
     current_session["csv_writer"] = None
 
 
+def refresh_screen_mode_timeout():
+    """
+    Si la pantalla está en modo result y ya pasó el tiempo de exhibición,
+    regresa a idle.
+    """
+    with state_lock:
+        if state["screen_mode"] != "result":
+            return
+
+        started_at = state.get("result_started_at")
+        if started_at is None:
+            return
+
+        elapsed = time.time() - started_at
+
+        if elapsed >= RESULT_SCREEN_DURATION_S:
+            state["screen_mode"] = "idle"
+            state["result_started_at"] = None
+            # Conservamos last_result_panel por si quieres inspeccionarlo en control.
+
+
 # =====================================================
 # RANKING DIARIO
 # =====================================================
 
 def get_today_ranking_all():
-    """
-    Lee sessions_summary.csv completo, pero solo devuelve
-    sesiones del día actual de la Raspberry Pi.
-    """
     today = date.today().isoformat()
     rows = []
 
@@ -181,15 +210,8 @@ def get_today_ranking_all():
 
 def get_live_ranking_window(limit=10):
     """
-    Ranking para pantalla.
-
-    Si hay juego activo:
-    - agrega el intento actual aunque tenga 0 puntos
-    - calcula posición en vivo
-    - si el intento actual no entra al top 10, muestra top 9 + participante actual abajo
-
-    Si no hay juego activo:
-    - muestra top 10 normal del día
+    Ranking para el modo game.
+    Si hay sesión activa, incluye al jugador actual aunque tenga 0 puntos.
     """
     ranking = get_today_ranking_all()
 
@@ -215,8 +237,6 @@ def get_live_ranking_window(limit=10):
             "is_current": True,
         }
 
-        # Si por alguna razón ya existiera la sesión actual en el resumen,
-        # la quitamos para evitar duplicados. La paranoia también compila.
         ranking = [
             item for item in ranking
             if item.get("session_id") != current_item["session_id"]
@@ -243,14 +263,12 @@ def get_live_ranking_window(limit=10):
             "current_rank": None,
         }
 
-    # Si el participante actual está dentro del top 10, mostramos top 10 normal.
     if current_rank <= limit:
         return {
             "ranking": ranking[:limit],
             "current_rank": current_rank,
         }
 
-    # Si está más abajo, mostramos top 9 + participante actual en la última línea.
     top_items = ranking[:limit - 1]
     current_item = next(
         item for item in ranking
@@ -265,6 +283,63 @@ def get_live_ranking_window(limit=10):
     }
 
 
+def build_result_panel(target_session_id, limit=10):
+    """
+    Construye el panel de resultado final del participante que acaba de jugar.
+    Muestra:
+    - nombre
+    - posición final
+    - hasta 10 posiciones cercanas alrededor de su lugar
+    """
+    ranking = get_today_ranking_all()
+
+    if not ranking:
+        return {
+            "participant_name": "PARTICIPANTE",
+            "rank": None,
+            "entries": [],
+        }
+
+    target_index = None
+
+    for index, item in enumerate(ranking):
+        if item.get("session_id") == target_session_id:
+            target_index = index
+            break
+
+    if target_index is None:
+        target_index = 0
+
+    target = ranking[target_index]
+
+    for item in ranking:
+        item["is_current"] = False
+
+    ranking[target_index]["is_current"] = True
+
+    total = len(ranking)
+
+    if total <= limit:
+        visible = ranking
+    else:
+        half = limit // 2
+        start = max(0, target_index - half)
+        end = start + limit
+
+        if end > total:
+            end = total
+            start = max(0, end - limit)
+
+        visible = ranking[start:end]
+
+    return {
+        "participant_name": target.get("participant_name", "PARTICIPANTE"),
+        "rank": target.get("rank"),
+        "entries": visible,
+        "score": target.get("score", 0),
+    }
+
+
 # =====================================================
 # RUTAS WEB
 # =====================================================
@@ -276,11 +351,14 @@ def index():
 
 @app.route("/display")
 def display():
+    refresh_screen_mode_timeout()
     return render_template("display.html")
 
 
 @app.route("/control")
 def control():
+    refresh_screen_mode_timeout()
+
     with state_lock:
         local_state = dict(state)
 
@@ -303,11 +381,14 @@ def control():
         current_rank=ranking_data["current_rank"],
         ranking_date=date.today().isoformat(),
         saved=saved,
+        screen_mode=local_state["screen_mode"],
     )
 
 
 @app.route("/api/state")
 def api_state():
+    refresh_screen_mode_timeout()
+
     with state_lock:
         local_state = dict(state)
 
@@ -322,6 +403,8 @@ def api_state():
 
 @app.route("/api/ranking")
 def api_ranking():
+    refresh_screen_mode_timeout()
+
     ranking_data = get_live_ranking_window(limit=10)
 
     return jsonify({
@@ -520,6 +603,10 @@ def start_game():
         state["session_csv_file"] = str(csv_path.relative_to(BASE_DIR))
         state["last_summary"] = None
 
+        state["screen_mode"] = "game"
+        state["result_started_at"] = None
+        state["last_result_panel"] = None
+
     print(f"[SESSION START] {session_id}")
 
 
@@ -531,6 +618,8 @@ def end_game():
     append_summary_csv(summary)
     close_current_csv_safely()
 
+    result_panel = build_result_panel(summary["session_id"], limit=10)
+
     with state_lock:
         state["speed"] = 0.0
         state["speed_smooth"] = 0.0
@@ -539,6 +628,10 @@ def end_game():
         state["last_event"] = "END"
 
         state["last_summary"] = summary
+
+        state["screen_mode"] = "result"
+        state["result_started_at"] = time.time()
+        state["last_result_panel"] = result_panel
 
     print(f"[SESSION END] {summary['session_id']}")
     print(

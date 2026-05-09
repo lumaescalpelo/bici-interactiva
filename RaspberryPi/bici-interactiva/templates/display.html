@@ -13,21 +13,35 @@
         <source src="/static/videos/idle.mp4" type="video/mp4">
       </video>
 
-      <div id="overlay">
-
-        <div id="rankPosition">--</div>
+      <!-- OVERLAY GAME -->
+      <div id="gameOverlay">
+        <div id="gameRankPosition">--</div>
 
         <div id="gameInfo">
-          <div id="name">PARTICIPANTE</div>
-          <div id="speed">0.0 km/h</div>
-          <div id="score">0000 pts</div>
+          <div id="gameName">PARTICIPANTE</div>
+          <div id="gameSpeed">0.0 km/h</div>
+          <div id="gameScore">0000 pts</div>
         </div>
 
-        <div id="rankingBox">
-          <div id="rankingTitle">RANKING DE HOY</div>
-          <ol id="rankingList"></ol>
+        <div id="gameRankingBox">
+          <div id="gameRankingTitle">RANKING DE HOY</div>
+          <ol id="gameRankingList"></ol>
+        </div>
+      </div>
+
+      <!-- OVERLAY RESULT -->
+      <div id="resultOverlay">
+        <div id="resultNameBox">
+          <div id="resultName">PARTICIPANTE</div>
         </div>
 
+        <div id="resultRankBox">
+          <div id="resultRank">--</div>
+        </div>
+
+        <div id="resultListBox">
+          <ol id="resultRankingList"></ol>
+        </div>
       </div>
     </div>
   </div>

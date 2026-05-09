@@ -33,7 +33,6 @@ body {
   height: var(--stage-height);
   left: var(--stage-left);
   top: var(--stage-top);
-  transform: none;
   background: black;
   overflow: hidden;
 }
@@ -47,7 +46,36 @@ body {
   object-fit: cover;
 }
 
-#overlay {
+/* =========================
+   MODOS DE PANTALLA
+   ========================= */
+
+body.idle-mode #gameOverlay,
+body.idle-mode #resultOverlay {
+  display: none;
+}
+
+body.game-mode #gameOverlay {
+  display: block;
+}
+
+body.game-mode #resultOverlay {
+  display: none;
+}
+
+body.result-mode #gameOverlay {
+  display: none;
+}
+
+body.result-mode #resultOverlay {
+  display: block;
+}
+
+/* =========================
+   GAME OVERLAY
+   ========================= */
+
+#gameOverlay {
   position: absolute;
   inset: 0;
   color: white;
@@ -55,38 +83,26 @@ body {
   pointer-events: none;
 }
 
-/* En idle no se ve ningún texto */
-body.idle-mode #overlay {
-  display: none;
-}
-
-/* En juego sí se muestra */
-body.game-mode #overlay {
-  display: block;
-}
-
-/* Número grande de posición */
-#rankPosition {
+#gameRankPosition {
   position: absolute;
   top: 18px;
   left: 22px;
-  font-size: 42px;
+  font-size: 38px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: -1px;
   opacity: 0.95;
 }
 
-/* Bloque principal */
 #gameInfo {
   position: absolute;
-  top: 72px;
-  left: 32px;
-  right: 32px;
+  top: 66px;
+  left: 28px;
+  right: 28px;
 }
 
-#name {
-  font-size: 30px;
+#gameName {
+  font-size: 26px;
   font-weight: 800;
   line-height: 1.1;
   overflow: hidden;
@@ -94,63 +110,62 @@ body.game-mode #overlay {
   text-overflow: ellipsis;
 }
 
-#speed {
-  margin-top: 18px;
-  font-size: 40px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-#score {
+#gameSpeed {
   margin-top: 14px;
   font-size: 34px;
   font-weight: 800;
   line-height: 1;
 }
 
-/* Ranking */
-#rankingBox {
-  position: absolute;
-  top: 250px;
-  left: 32px;
-  right: 32px;
+#gameScore {
+  margin-top: 12px;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
 
-  padding: 14px 16px 16px 16px;
+#gameRankingBox {
+  position: absolute;
+  top: 210px;
+  left: 28px;
+  right: 28px;
+
+  padding: 12px 14px 14px 14px;
 
   background: rgba(0, 0, 0, 0.42);
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 12px;
 }
 
-#rankingTitle {
-  font-size: 18px;
+#gameRankingTitle {
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: 1px;
   margin-bottom: 10px;
   opacity: 0.85;
 }
 
-#rankingList {
+#gameRankingList {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-#rankingList li {
+#gameRankingList li {
   display: grid;
-  grid-template-columns: 42px 1fr 96px;
+  grid-template-columns: 36px 1fr 88px;
   align-items: center;
   gap: 8px;
 
-  min-height: 36px;
+  min-height: 31px;
 
-  font-size: 22px;
-  line-height: 1.1;
+  font-size: 18px;
+  line-height: 1.05;
 
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
 }
 
-#rankingList li:last-child {
+#gameRankingList li:last-child {
   border-bottom: none;
 }
 
@@ -170,9 +185,120 @@ body.game-mode #overlay {
   font-weight: 800;
 }
 
-#rankingList li.current-player {
+#gameRankingList li.current-player {
   background: rgba(255, 255, 255, 0.20);
   border-radius: 6px;
   padding: 4px 6px;
   margin: 3px -6px;
+}
+
+/* =========================
+   RESULT OVERLAY
+   ========================= */
+
+#resultOverlay {
+  position: absolute;
+  inset: 0;
+  background-image: url("/static/images/result_bg.png");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  color: #111;
+  pointer-events: none;
+}
+
+#resultNameBox {
+  position: absolute;
+  left: 24px;
+  top: 18px;
+  width: 450px;
+  height: 96px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  padding: 0 18px;
+}
+
+#resultName {
+  width: 100%;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.05;
+  color: #0c2230;
+
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#resultRankBox {
+  position: absolute;
+  left: 505px;
+  top: 18px;
+  width: 100px;
+  height: 96px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#resultRank {
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  color: #0c2230;
+}
+
+#resultListBox {
+  position: absolute;
+  left: 32px;
+  top: 154px;
+  width: 574px;
+  height: 286px;
+
+  padding: 12px 16px;
+}
+
+#resultRankingList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#resultRankingList li {
+  display: grid;
+  grid-template-columns: 42px 1fr 120px;
+  align-items: center;
+  gap: 10px;
+
+  min-height: 25px;
+
+  font-size: 18px;
+  line-height: 1.05;
+  color: #1d1d1d;
+}
+
+.result-ranking-rank {
+  font-weight: 900;
+}
+
+.result-ranking-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.result-ranking-score {
+  text-align: right;
+  font-weight: 900;
+}
+
+#resultRankingList li.current-player {
+  background: rgba(255, 255, 255, 0.32);
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin: 2px -6px;
 }
