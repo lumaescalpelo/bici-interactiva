@@ -5,26 +5,31 @@
   <title>Bici Interactiva</title>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body class="idle-mode">
 
   <div id="screen">
-
     <div id="stage">
       <video id="mainVideo" autoplay muted loop playsinline>
         <source src="/static/videos/idle.mp4" type="video/mp4">
       </video>
 
       <div id="overlay">
-        <div id="name">PARTICIPANTE</div>
-        <div id="speed">0.0 km/h</div>
-        <div id="score">0000 pts</div>
 
-        <div id="hint">
-          ESPERANDO PARTICIPANTE
+        <div id="rankPosition">--</div>
+
+        <div id="gameInfo">
+          <div id="name">PARTICIPANTE</div>
+          <div id="speed">0.0 km/h</div>
+          <div id="score">0000 pts</div>
         </div>
+
+        <div id="rankingBox">
+          <div id="rankingTitle">RANKING DE HOY</div>
+          <ol id="rankingList"></ol>
+        </div>
+
       </div>
     </div>
-
   </div>
 
   <script src="/static/js/display.js"></script>

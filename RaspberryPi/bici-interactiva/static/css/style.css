@@ -16,11 +16,6 @@ body {
 :root {
   --stage-width: 640px;
   --stage-height: 1024px;
-
-  /*
-    Para controlador LED típico:
-    captura desde esquina superior izquierda.
-  */
   --stage-left: 0px;
   --stage-top: 0px;
 }
@@ -60,13 +55,39 @@ body {
   pointer-events: none;
 }
 
-#name {
+/* En idle no se ve ningún texto */
+body.idle-mode #overlay {
+  display: none;
+}
+
+/* En juego sí se muestra */
+body.game-mode #overlay {
+  display: block;
+}
+
+/* Número grande de posición */
+#rankPosition {
   position: absolute;
-  top: 40px;
-  left: 40px;
-  right: 40px;
+  top: 18px;
+  left: 22px;
   font-size: 42px;
-  font-weight: bold;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -1px;
+  opacity: 0.95;
+}
+
+/* Bloque principal */
+#gameInfo {
+  position: absolute;
+  top: 72px;
+  left: 32px;
+  right: 32px;
+}
+
+#name {
+  font-size: 30px;
+  font-weight: 800;
   line-height: 1.1;
   overflow: hidden;
   white-space: nowrap;
@@ -74,26 +95,84 @@ body {
 }
 
 #speed {
-  position: absolute;
-  top: 120px;
-  left: 40px;
-  font-size: 54px;
-  font-weight: bold;
+  margin-top: 18px;
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 #score {
-  position: absolute;
-  top: 200px;
-  left: 40px;
-  font-size: 46px;
-  font-weight: bold;
+  margin-top: 14px;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
 }
 
-#hint {
+/* Ranking */
+#rankingBox {
   position: absolute;
-  bottom: 40px;
-  left: 40px;
-  right: 40px;
-  font-size: 28px;
-  opacity: 0.75;
+  top: 250px;
+  left: 32px;
+  right: 32px;
+
+  padding: 14px 16px 16px 16px;
+
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px;
+}
+
+#rankingTitle {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  opacity: 0.85;
+}
+
+#rankingList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#rankingList li {
+  display: grid;
+  grid-template-columns: 42px 1fr 96px;
+  align-items: center;
+  gap: 8px;
+
+  min-height: 36px;
+
+  font-size: 22px;
+  line-height: 1.1;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+#rankingList li:last-child {
+  border-bottom: none;
+}
+
+.ranking-rank {
+  font-weight: 800;
+  opacity: 0.8;
+}
+
+.ranking-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ranking-score {
+  text-align: right;
+  font-weight: 800;
+}
+
+#rankingList li.current-player {
+  background: rgba(255, 255, 255, 0.20);
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: 3px -6px;
 }

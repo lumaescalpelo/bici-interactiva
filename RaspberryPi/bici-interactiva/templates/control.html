@@ -41,6 +41,24 @@
       cursor: pointer;
     }
 
+    button:disabled,
+    input:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .saved {
+      display: inline-block;
+      margin-top: 18px;
+      padding: 12px 16px;
+      background: #123d1d;
+      color: #9dffb0;
+      border: 1px solid #58d36f;
+      border-radius: 8px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+
     .current,
     .status {
       margin-top: 24px;
@@ -82,6 +100,30 @@
     .value {
       font-weight: bold;
     }
+
+    .ranking {
+      margin-top: 40px;
+      max-width: 700px;
+    }
+
+    .ranking h2 {
+      font-size: 26px;
+      margin-bottom: 14px;
+    }
+
+    .ranking ol {
+      padding-left: 32px;
+      font-size: 20px;
+    }
+
+    .ranking li {
+      margin-bottom: 8px;
+    }
+
+    .current-player {
+      color: #9dffb0;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -106,6 +148,12 @@
       Guardar nombre
     </button>
   </form>
+
+  {% if saved %}
+    <div class="saved">
+      Nombre guardado
+    </div>
+  {% endif %}
 
   <div class="current">
     Participante actual:
@@ -132,6 +180,13 @@
     {% endif %}
   </div>
 
+  {% if current_rank %}
+    <div class="status">
+      Posición actual:
+      <strong>#{{ current_rank }}</strong>
+    </div>
+  {% endif %}
+
   <div class="grid">
     <div class="key">Último evento</div>
     <div class="value"><code>{{ last_event }}</code></div>
@@ -152,10 +207,24 @@
     <div class="value">{{ sample_count }}</div>
   </div>
 
-  <p style="margin-top: 40px; opacity: 0.6;">
-    El juego inicia cuando el ESP32 manda <code>START</code> por UART.
-    Termina cuando manda <code>END</code>.
-  </p>
+  <div class="ranking">
+    <h2>Ranking de hoy · {{ ranking_date }}</h2>
+
+    {% if ranking %}
+      <ol>
+        {% for item in ranking %}
+          <li class="{% if item.is_current %}current-player{% endif %}">
+            #{{ item.rank }}
+            {{ item.participant_name }}
+            —
+            {{ item.score }} pts
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p>Aún no hay registros hoy.</p>
+    {% endif %}
+  </div>
 
 </body>
 </html>

@@ -18,8 +18,6 @@ app = Flask(__name__)
 
 SERIAL_PORT = "/dev/serial0"
 SERIAL_BAUD = 19200
-
-# Debe coincidir con REPORT_HZ del ESP32
 SAMPLES_PER_SECOND = 10
 
 
@@ -130,11 +128,10 @@ def close_current_csv_safely():
 # RANKING DIARIO
 # =====================================================
 
-def get_today_ranking(limit=10):
+def get_today_ranking_all():
     """
     Lee sessions_summary.csv completo, pero solo devuelve
-    las sesiones cuyo start_time corresponde al día actual
-    de la Raspberry Pi.
+    sesiones del día actual de la Raspberry Pi.
     """
     today = date.today().isoformat()
     rows = []
@@ -171,11 +168,101 @@ def get_today_ranking(limit=10):
                 "sample_count": sample_count,
                 "session_id": row.get("session_id", ""),
                 "start_time": start_time,
+                "is_current": False,
             })
 
     rows.sort(key=lambda item: item["score"], reverse=True)
 
-    return rows[:limit]
+    for index, item in enumerate(rows, start=1):
+        item["rank"] = index
+
+    return rows
+
+
+def get_live_ranking_window(limit=10):
+    """
+    Ranking para pantalla.
+
+    Si hay juego activo:
+    - agrega el intento actual aunque tenga 0 puntos
+    - calcula posición en vivo
+    - si el intento actual no entra al top 10, muestra top 9 + participante actual abajo
+
+    Si no hay juego activo:
+    - muestra top 10 normal del día
+    """
+    ranking = get_today_ranking_all()
+
+    with state_lock:
+        game_active = state["game_active"]
+        participant_name = state["participant_name"]
+        score = state["score"]
+        session_id = state["session_id"]
+
+    current_rank = None
+
+    if game_active:
+        current_item = {
+            "participant_name": participant_name,
+            "score": score,
+            "avg_speed": 0.0,
+            "max_speed": 0.0,
+            "avg_smooth": 0.0,
+            "max_smooth": 0.0,
+            "sample_count": 0,
+            "session_id": session_id or "current",
+            "start_time": datetime.now().isoformat(),
+            "is_current": True,
+        }
+
+        # Si por alguna razón ya existiera la sesión actual en el resumen,
+        # la quitamos para evitar duplicados. La paranoia también compila.
+        ranking = [
+            item for item in ranking
+            if item.get("session_id") != current_item["session_id"]
+        ]
+
+        ranking.append(current_item)
+
+    ranking.sort(key=lambda item: item["score"], reverse=True)
+
+    for index, item in enumerate(ranking, start=1):
+        item["rank"] = index
+        if item.get("is_current"):
+            current_rank = index
+
+    if not game_active:
+        return {
+            "ranking": ranking[:limit],
+            "current_rank": None,
+        }
+
+    if current_rank is None:
+        return {
+            "ranking": ranking[:limit],
+            "current_rank": None,
+        }
+
+    # Si el participante actual está dentro del top 10, mostramos top 10 normal.
+    if current_rank <= limit:
+        return {
+            "ranking": ranking[:limit],
+            "current_rank": current_rank,
+        }
+
+    # Si está más abajo, mostramos top 9 + participante actual en la última línea.
+    top_items = ranking[:limit - 1]
+    current_item = next(
+        item for item in ranking
+        if item.get("is_current")
+    )
+
+    visible = top_items + [current_item]
+
+    return {
+        "ranking": visible,
+        "current_rank": current_rank,
+    }
 
 
 # =====================================================
@@ -197,7 +284,8 @@ def control():
     with state_lock:
         local_state = dict(state)
 
-    ranking = get_today_ranking(limit=10)
+    ranking_data = get_live_ranking_window(limit=10)
+    saved = request.args.get("saved") == "1"
 
     return render_template(
         "control.html",
@@ -211,8 +299,10 @@ def control():
         speed_smooth=local_state["speed_smooth"],
         score=local_state["score"],
         sample_count=local_state["sample_count"],
-        ranking=ranking,
+        ranking=ranking_data["ranking"],
+        current_rank=ranking_data["current_rank"],
         ranking_date=date.today().isoformat(),
+        saved=saved,
     )
 
 
@@ -221,7 +311,10 @@ def api_state():
     with state_lock:
         local_state = dict(state)
 
-    local_state["ranking"] = get_today_ranking(limit=10)
+    ranking_data = get_live_ranking_window(limit=10)
+
+    local_state["ranking"] = ranking_data["ranking"]
+    local_state["current_rank"] = ranking_data["current_rank"]
     local_state["ranking_date"] = date.today().isoformat()
 
     return jsonify(local_state)
@@ -229,9 +322,12 @@ def api_state():
 
 @app.route("/api/ranking")
 def api_ranking():
+    ranking_data = get_live_ranking_window(limit=10)
+
     return jsonify({
         "date": date.today().isoformat(),
-        "ranking": get_today_ranking(limit=10)
+        "ranking": ranking_data["ranking"],
+        "current_rank": ranking_data["current_rank"],
     })
 
 
@@ -246,7 +342,7 @@ def api_name():
         if not state["game_active"]:
             state["participant_name"] = name
 
-    return redirect("/control")
+    return redirect("/control?saved=1")
 
 
 # =====================================================
