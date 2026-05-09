@@ -43,3 +43,4 @@ Se realizaran los siguientes programas
 - Cliente de Base de Datos para registro
 - Programa para hacer append en archivo excel
 - Programa gráfico
+
