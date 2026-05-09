@@ -2,6 +2,85 @@
 
 El primer requisito es cargar Raspberry Pi OS Trixie en la Raspberry Pi 4 con ayuda de Raspberry Pi Imager.
 
+A continuación hay que activar la interfaz serial de la Raspberry Pi. Ejecuta:
+
+```
+sudo raspi-config
+```
+
+Ve a:
+
+```
+Interface Options
+→ Serial Port
+```
+
+Cuando pregunte:
+
+```
+Would you like a login shell to be accessible over serial?
+```
+
+Responde:
+
+```
+No
+```
+
+Cuando pregunte:
+
+```
+Would you like the serial port hardware to be enabled?
+```
+
+Responde:
+
+```
+Yes
+```
+
+Luego reinicia:
+
+```
+sudo reboot
+```
+
+Después revisa:
+
+```
+ls -l /dev/serial0
+```
+
+Debería apuntar a algo como:
+
+```
+/dev/ttyAMA0
+```
+
+o:
+
+```
+/dev/ttyS0
+```
+
+Para Python, usa mejor:
+
+```
+/dev/serial0
+```
+
+porque es el alias estable.
+
+Si tienes cargado el programa `03_Serial_Send` en el ESP32, tienes conectado el sensor de efecto Hall en el pin 4,  el boton de activación en el pin 23, el pin RX de la Raspberry Pi al pin TX del ESP32 y el pin GND de la Raspberry Pi conectado al pin GND del ESP32, puedes probar la conexión serial con el siguiente comando en una terminal de Raspberry Pi.
+
+```
+python3 -m serial.tools.miniterm /dev/serial0 19200
+```
+
+Deberás ver los datos enviados por el ESP32.
+
+Para salir usa el comando `Ctrl + ]`
+
 ## Proyecto
 
 Primero se debe crear la estructura de carpetas.

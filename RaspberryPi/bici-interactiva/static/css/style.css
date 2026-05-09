@@ -13,14 +13,18 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/*
-  Esta capa representa la salida completa HDMI.
+:root {
+  --stage-width: 640px;
+  --stage-height: 1024px;
 
-  Si tu Raspberry está en 640x1024, #screen ocupa toda la pantalla.
+  /*
+    Para controlador LED típico:
+    captura desde esquina superior izquierda.
+  */
+  --stage-left: 0px;
+  --stage-top: 0px;
+}
 
-  Si tu Raspberry está en 1920x1080, #screen también ocupa toda la pantalla,
-  pero #stage se centra dentro.
-*/
 #screen {
   position: relative;
   width: 100vw;
@@ -28,37 +32,26 @@ body {
   background: black;
 }
 
-/*
-  Esta es tu matriz LED real:
-  5 paneles x 8 paneles
-  640 x 1024 px
-*/
 #stage {
   position: absolute;
-  width: 640px;
-  height: 1024px;
-  left: 0;
-  top: 0;
+  width: var(--stage-width);
+  height: var(--stage-height);
+  left: var(--stage-left);
+  top: var(--stage-top);
   transform: none;
   background: black;
   overflow: hidden;
 }
 
-/*
-  El video ocupa exactamente la matriz.
-*/
 #mainVideo {
   position: absolute;
-  width: 640px;
-  height: 1024px;
+  width: var(--stage-width);
+  height: var(--stage-height);
   left: 0;
   top: 0;
   object-fit: cover;
 }
 
-/*
-  Capa de interfaz encima del video.
-*/
 #overlay {
   position: absolute;
   inset: 0;
@@ -71,8 +64,13 @@ body {
   position: absolute;
   top: 40px;
   left: 40px;
+  right: 40px;
   font-size: 42px;
   font-weight: bold;
+  line-height: 1.1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 #speed {

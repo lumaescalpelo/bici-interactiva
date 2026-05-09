@@ -7,57 +7,100 @@ const nameLabel = document.getElementById("name");
 const IDLE_VIDEO = "/static/videos/idle.mp4";
 const GAME_VIDEO = "/static/videos/game.mp4";
 
-let gameActive = false;
+let localGameActive = false;
+let serverGameActive = false;
+
 
 function playIdle() {
-  gameActive = false;
+  localGameActive = false;
 
   video.loop = true;
-  video.src = IDLE_VIDEO;
-  video.play();
 
-  speed.textContent = "0.0 km/h";
-  score.textContent = "0000 pts";
-  hint.textContent = "Presiona ESPACIO para iniciar prueba";
+  if (!video.src.endsWith(IDLE_VIDEO)) {
+    video.src = IDLE_VIDEO;
+  }
+
+  video.play().catch((error) => {
+    console.error("No se pudo reproducir idle:", error);
+  });
+
+  hint.textContent = "ESPERANDO PARTICIPANTE";
 }
 
+
 function playGame() {
-  gameActive = true;
+  localGameActive = true;
 
   video.loop = false;
-  video.src = GAME_VIDEO;
-  video.play();
+
+  if (!video.src.endsWith(GAME_VIDEO)) {
+    video.src = GAME_VIDEO;
+  }
+
+  video.currentTime = 0;
+
+  video.play().catch((error) => {
+    console.error("No se pudo reproducir game:", error);
+  });
 
   hint.textContent = "PRUEBA EN CURSO";
 }
 
+
 async function updateStateFromServer() {
   try {
-    const response = await fetch("/api/state");
+    const response = await fetch("/api/state", {
+      cache: "no-store"
+    });
+
     const data = await response.json();
 
     nameLabel.textContent = data.participant_name || "PARTICIPANTE";
-    speed.textContent = `${Number(data.speed).toFixed(1)} km/h`;
-    score.textContent = `${String(data.score).padStart(4, "0")} pts`;
+
+    const speedValue = Number(data.speed || 0);
+    const scoreValue = Number(data.score || 0);
+
+    speed.textContent = `${speedValue.toFixed(1)} km/h`;
+    score.textContent = `${String(scoreValue).padStart(4, "0")} pts`;
+
+    serverGameActive = Boolean(data.game_active);
+
+    if (serverGameActive && !localGameActive) {
+      playGame();
+    }
+
+    if (!serverGameActive && localGameActive) {
+      playIdle();
+    }
 
   } catch (error) {
     console.error("No se pudo leer /api/state", error);
   }
 }
 
+
+// Si el video termina antes de que llegue END,
+// lo dejamos visualmente en idle.
+// En operación normal, END debe llegar desde ESP32.
 video.addEventListener("ended", () => {
-  if (gameActive) {
+  if (localGameActive && !serverGameActive) {
     playIdle();
   }
 });
 
+
+// Tecla de prueba local.
+// La puedes comentar cuando ya no la necesites.
 document.addEventListener("keydown", (event) => {
-  if (event.code === "Space" && !gameActive) {
+  if (event.code === "Space" && !localGameActive) {
     playGame();
   }
 });
 
-setInterval(updateStateFromServer, 250);
+
+// Actualización rápida para que velocidad y puntaje se sientan vivos.
+// 100 ms = 10 Hz, igual que ESP32.
+setInterval(updateStateFromServer, 100);
 
 playIdle();
 updateStateFromServer();
