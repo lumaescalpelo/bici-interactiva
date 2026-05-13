@@ -426,6 +426,74 @@ def get_live_ranking_window(limit=10):
         "current_rank": current_rank,
     }
 
+def get_live_nearby_ranking(positions_above=2, positions_below=2):
+    """
+    Devuelve un ranking cercano al participante actual:
+    - hasta 2 posiciones arriba
+    - participante actual
+    - hasta 2 posiciones abajo
+
+    Si todavía no hay juego activo, devuelve lista vacía.
+    """
+    ranking = get_today_ranking_all()
+
+    with state_lock:
+        game_active = state["game_active"]
+        participant_name = state["participant_name"]
+        score = state["score"]
+        session_id = state["session_id"]
+
+    if not game_active:
+        return {
+            "ranking": [],
+            "current_rank": None,
+        }
+
+    current_item = {
+        "participant_name": participant_name,
+        "score": score,
+        "avg_speed": 0.0,
+        "max_speed": 0.0,
+        "avg_smooth": 0.0,
+        "max_smooth": 0.0,
+        "sample_count": 0,
+        "constancy_factor": 0.0,
+        "session_id": session_id or "current",
+        "start_time": datetime.now().isoformat(),
+        "is_current": True,
+    }
+
+    ranking = [
+        item for item in ranking
+        if item.get("session_id") != current_item["session_id"]
+    ]
+
+    ranking.append(current_item)
+    ranking.sort(key=lambda item: item["score"], reverse=True)
+
+    current_index = None
+
+    for index, item in enumerate(ranking):
+        item["rank"] = index + 1
+
+        if item.get("is_current"):
+            current_index = index
+
+    if current_index is None:
+        return {
+            "ranking": [],
+            "current_rank": None,
+        }
+
+    start = max(0, current_index - positions_above)
+    end = min(len(ranking), current_index + positions_below + 1)
+
+    visible = ranking[start:end]
+
+    return {
+        "ranking": visible,
+        "current_rank": current_index + 1,
+    }
 
 def build_result_panel(target_session_id, limit=10):
     ranking = get_today_ranking_all()
@@ -531,9 +599,17 @@ def api_state():
         local_state = dict(state)
 
     ranking_data = get_live_ranking_window(limit=10)
+    nearby_ranking_data = get_live_nearby_ranking(
+        positions_above=2,
+        positions_below=2
+    )
 
     local_state["ranking"] = ranking_data["ranking"]
     local_state["current_rank"] = ranking_data["current_rank"]
+
+    local_state["nearby_ranking"] = nearby_ranking_data["ranking"]
+    local_state["nearby_current_rank"] = nearby_ranking_data["current_rank"]
+
     local_state["ranking_date"] = date.today().isoformat()
 
     return jsonify(local_state)

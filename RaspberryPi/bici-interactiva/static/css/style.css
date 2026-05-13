@@ -47,7 +47,7 @@ body {
 }
 
 /* =========================
-   MODOS DE PANTALLA
+   MODOS
    ========================= */
 
 body.idle-mode #gameOverlay,
@@ -71,6 +71,15 @@ body.result-mode #resultOverlay {
   display: block;
 }
 
+/* La interfaz de juego NO aparece durante los primeros 7 segundos */
+body.game-mode #gameOverlay {
+  opacity: 0;
+}
+
+body.game-mode.game-ui-visible #gameOverlay {
+  opacity: 1;
+}
+
 /* =========================
    GAME OVERLAY
    ========================= */
@@ -79,117 +88,145 @@ body.result-mode #resultOverlay {
   position: absolute;
   inset: 0;
   color: white;
-  text-shadow: 0 0 8px black;
   pointer-events: none;
+  transition: opacity 220ms ease;
 }
 
-#gameRankPosition {
+/*
+  Recuadro azul / superior izquierdo.
+  En tu imagen corresponde al rectángulo largo superior izquierdo.
+*/
+#gameNameBox {
   position: absolute;
-  top: 18px;
-  left: 22px;
-  font-size: 38px;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: -1px;
-  opacity: 0.95;
-}
+  left: 24px;
+  top: 32px;
+  width: 451px;
+  height: 83px;
 
-#gameInfo {
-  position: absolute;
-  top: 66px;
-  left: 28px;
-  right: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  padding: 0 20px;
+  overflow: hidden;
 }
 
 #gameName {
-  font-size: 26px;
-  font-weight: 800;
-  line-height: 1.1;
-  overflow: hidden;
+  width: 100%;
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1.05;
+  color: white;
+
   white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
+
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
 }
 
-#gameSpeed {
-  margin-top: 14px;
-  font-size: 34px;
-  font-weight: 800;
-  line-height: 1;
+/*
+  Recuadro rojo / superior derecho.
+  Posición grande arriba, puntos abajo.
+*/
+#gameRankBox {
+  position: absolute;
+  left: 506px;
+  top: 32px;
+  width: 98px;
+  height: 83px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+}
+
+#gameRankPosition {
+  font-size: 39px;
+  font-weight: 1000;
+  line-height: 0.92;
+  color: white;
+  letter-spacing: -1px;
+
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
 }
 
 #gameScore {
-  margin-top: 12px;
-  font-size: 28px;
+  margin-top: 6px;
+  max-width: 96px;
+
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+  color: white;
+  text-align: center;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
+}
+
+/*
+  Recuadro verde / ranking.
+  En tu imagen corresponde al rectángulo grande central.
+*/
+#gameNearbyRankingBox {
+  position: absolute;
+  left: 0px;
+  top: 149px;
+  width: 605px;
+  height: 295px;
+
+  padding: 22px 28px;
+  overflow: hidden;
+}
+
+#gameNearbyRankingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#gameNearbyRankingList li {
+  display: grid;
+  grid-template-columns: 48px 1fr 104px;
+  gap: 10px;
+  align-items: center;
+
+  height: 48px;
+
+  color: white;
+  font-size: 25px;
   font-weight: 800;
   line-height: 1;
+
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.60);
 }
 
-#gameRankingBox {
-  position: absolute;
-  top: 210px;
-  left: 28px;
-  right: 28px;
-
-  padding: 12px 14px 14px 14px;
-
-  background: rgba(0, 0, 0, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 12px;
+.nearby-rank {
+  text-align: left;
+  font-weight: 1000;
 }
 
-#gameRankingTitle {
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  margin-bottom: 10px;
-  opacity: 0.85;
-}
-
-#gameRankingList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-#gameRankingList li {
-  display: grid;
-  grid-template-columns: 36px 1fr 88px;
-  align-items: center;
-  gap: 8px;
-
-  min-height: 31px;
-
-  font-size: 18px;
-  line-height: 1.05;
-
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-}
-
-#gameRankingList li:last-child {
-  border-bottom: none;
-}
-
-.ranking-rank {
-  font-weight: 800;
-  opacity: 0.8;
-}
-
-.ranking-name {
+.nearby-name {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.ranking-score {
+.nearby-score {
   text-align: right;
-  font-weight: 800;
+  font-weight: 1000;
 }
 
-#gameRankingList li.current-player {
-  background: rgba(255, 255, 255, 0.20);
-  border-radius: 6px;
-  padding: 4px 6px;
-  margin: 3px -6px;
+#gameNearbyRankingList li.current-player {
+  font-size: 31px;
+  font-weight: 1000;
 }
 
 /* =========================

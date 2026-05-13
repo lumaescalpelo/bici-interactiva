@@ -15,18 +15,23 @@
 
       <!-- OVERLAY GAME -->
       <div id="gameOverlay">
-        <div id="gameRankPosition">--</div>
 
-        <div id="gameInfo">
+        <!-- Nombre en recuadro azul / superior izquierdo -->
+        <div id="gameNameBox">
           <div id="gameName">PARTICIPANTE</div>
-          <div id="gameSpeed">0.0 km/h</div>
+        </div>
+
+        <!-- Ranking y puntos en recuadro rojo / superior derecho -->
+        <div id="gameRankBox">
+          <div id="gameRankPosition">--</div>
           <div id="gameScore">0000 pts</div>
         </div>
 
-        <div id="gameRankingBox">
-          <div id="gameRankingTitle">RANKING DE HOY</div>
-          <ol id="gameRankingList"></ol>
+        <!-- Ranking cercano en recuadro verde -->
+        <div id="gameNearbyRankingBox">
+          <ol id="gameNearbyRankingList"></ol>
         </div>
+
       </div>
 
       <!-- OVERLAY RESULT -->
