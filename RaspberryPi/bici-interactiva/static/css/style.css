@@ -99,7 +99,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 #gameNameBox {
   position: absolute;
   left: 24px;
-  top: 32px;
+  top: 48px;
   width: 451px;
   height: 83px;
 
@@ -113,7 +113,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 #gameName {
   width: 100%;
-  font-size: 34px;
+  font-size: 21px;
   font-weight: 900;
   line-height: 1.05;
   color: white;
