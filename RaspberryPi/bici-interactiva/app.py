@@ -3,6 +3,7 @@ import threading
 import time
 import csv
 import re
+import math
 from pathlib import Path
 from datetime import datetime, date
 
@@ -25,6 +26,30 @@ RESULT_SCREEN_DURATION_S = 12
 
 
 # =====================================================
+# PUNTAJE
+# =====================================================
+
+# Escala visual del puntaje.
+# Si los puntos quedan muy altos o bajos, ajusta esto.
+SCORE_SCALE = 10.0
+
+# Penalización por inestabilidad.
+# Más alto = castiga más los cambios bruscos.
+CONSTANCY_PENALTY_WEIGHT = 0.85
+
+# Nunca dejamos que la constancia baje de esto.
+# Así una sesión irregular no se va a cero absoluto.
+MIN_CONSTANCY_FACTOR = 0.40
+
+# Tampoco dejamos que pase de 1.
+MAX_CONSTANCY_FACTOR = 1.00
+
+# Ignora valores casi cero para calcular constancia.
+# Esto evita que pequeños ceros iniciales ensucien demasiado.
+MIN_SPEED_FOR_STATS = 0.5
+
+
+# =====================================================
 # RUTAS DE DATOS
 # =====================================================
 
@@ -32,6 +57,26 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
 SUMMARY_CSV = DATA_DIR / "sessions_summary.csv"
+
+SUMMARY_FIELDS = [
+    "session_id",
+    "participant_name",
+    "start_time",
+    "data_start_time",
+    "end_time",
+    "duration_s",
+    "sample_count",
+    "avg_speed",
+    "max_speed",
+    "avg_smooth",
+    "max_smooth",
+    "std_smooth",
+    "cv_smooth",
+    "constancy_factor",
+    "live_score",
+    "final_score",
+    "csv_file",
+]
 
 
 # =====================================================
@@ -60,22 +105,17 @@ state = {
 
     # idle | game | result
     "screen_mode": "idle",
-
-    # marca temporal para salir de result automáticamente
     "result_started_at": None,
-
-    # panel de resultado para la pantalla final
     "last_result_panel": None,
 }
 
 state_lock = threading.Lock()
 
-score_accumulator = 0.0
-
 current_session = {
     "id": "",
     "participant_name": "",
-    "start_time": None,
+    "start_time": None,       # momento de START
+    "data_start_time": None,  # primera muestra real
     "end_time": None,
     "csv_path": None,
     "csv_file_handle": None,
@@ -91,24 +131,63 @@ current_session = {
 def ensure_data_dirs():
     DATA_DIR.mkdir(exist_ok=True)
     SESSIONS_DIR.mkdir(exist_ok=True)
+    ensure_summary_schema()
 
+
+def ensure_summary_schema():
+    """
+    Crea o migra sessions_summary.csv para que tenga las columnas nuevas.
+    Si ya existía con columnas viejas, conserva los datos y rellena lo faltante.
+    """
     if not SUMMARY_CSV.exists():
         with SUMMARY_CSV.open("w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file)
-            writer.writerow([
-                "session_id",
-                "participant_name",
-                "start_time",
-                "end_time",
-                "duration_s",
-                "sample_count",
-                "avg_speed",
-                "max_speed",
-                "avg_smooth",
-                "max_smooth",
-                "live_score",
-                "csv_file",
-            ])
+            writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS)
+            writer.writeheader()
+        return
+
+    with SUMMARY_CSV.open("r", newline="", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        old_fields = reader.fieldnames or []
+        rows = list(reader)
+
+    if old_fields == SUMMARY_FIELDS:
+        return
+
+    migrated_rows = []
+
+    for row in rows:
+        migrated = {}
+
+        for field in SUMMARY_FIELDS:
+            migrated[field] = row.get(field, "")
+
+        # Compatibilidad con archivos anteriores
+        if not migrated["final_score"]:
+            migrated["final_score"] = row.get("live_score", "0")
+
+        if not migrated["data_start_time"]:
+            migrated["data_start_time"] = row.get("start_time", "")
+
+        if not migrated["std_smooth"]:
+            migrated["std_smooth"] = "0.000"
+
+        if not migrated["cv_smooth"]:
+            migrated["cv_smooth"] = "0.000"
+
+        if not migrated["constancy_factor"]:
+            migrated["constancy_factor"] = "1.000"
+
+        migrated_rows.append(migrated)
+
+    backup_path = SUMMARY_CSV.with_suffix(".csv.bak")
+    SUMMARY_CSV.replace(backup_path)
+
+    with SUMMARY_CSV.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS)
+        writer.writeheader()
+        writer.writerows(migrated_rows)
+
+    print(f"[MIGRATION] Resumen migrado. Backup: {backup_path}")
 
 
 def slugify_name(name):
@@ -137,10 +216,6 @@ def close_current_csv_safely():
 
 
 def refresh_screen_mode_timeout():
-    """
-    Si la pantalla está en modo result y ya pasó el tiempo de exhibición,
-    regresa a idle.
-    """
     with state_lock:
         if state["screen_mode"] != "result":
             return
@@ -154,7 +229,87 @@ def refresh_screen_mode_timeout():
         if elapsed >= RESULT_SCREEN_DURATION_S:
             state["screen_mode"] = "idle"
             state["result_started_at"] = None
-            # Conservamos last_result_panel por si quieres inspeccionarlo en control.
+
+
+# =====================================================
+# CÁLCULO DE PUNTAJE
+# =====================================================
+
+def calculate_session_metrics(samples):
+    """
+    Calcula métricas y puntaje usando velocidad suavizada.
+
+    La constancia se mide con:
+    cv = std / promedio
+
+    Puntaje:
+    avg_smooth * duration_s * constancy_factor * SCORE_SCALE
+    """
+    if not samples:
+        return {
+            "sample_count": 0,
+            "duration_s": 0.0,
+            "avg_speed": 0.0,
+            "max_speed": 0.0,
+            "avg_smooth": 0.0,
+            "max_smooth": 0.0,
+            "std_smooth": 0.0,
+            "cv_smooth": 0.0,
+            "constancy_factor": MIN_CONSTANCY_FACTOR,
+            "final_score": 0,
+        }
+
+    speeds = [sample["speed"] for sample in samples]
+    smooth_values_all = [sample["speed_smooth"] for sample in samples]
+
+    # Para estadística de constancia ignoramos ruido casi cero.
+    smooth_values = [
+        value for value in smooth_values_all
+        if value >= MIN_SPEED_FOR_STATS
+    ]
+
+    if not smooth_values:
+        smooth_values = smooth_values_all
+
+    sample_count = len(samples)
+    duration_s = sample_count / SAMPLES_PER_SECOND
+
+    avg_speed = sum(speeds) / len(speeds)
+    max_speed = max(speeds)
+
+    avg_smooth = sum(smooth_values_all) / len(smooth_values_all)
+    max_smooth = max(smooth_values_all)
+
+    if len(smooth_values) > 1:
+        stats_avg = sum(smooth_values) / len(smooth_values)
+        variance = sum((value - stats_avg) ** 2 for value in smooth_values) / len(smooth_values)
+        std_smooth = math.sqrt(variance)
+    else:
+        stats_avg = smooth_values[0] if smooth_values else 0.0
+        std_smooth = 0.0
+
+    if stats_avg > 0:
+        cv_smooth = std_smooth / stats_avg
+    else:
+        cv_smooth = 1.0
+
+    constancy_factor = 1.0 - (cv_smooth * CONSTANCY_PENALTY_WEIGHT)
+    constancy_factor = max(MIN_CONSTANCY_FACTOR, min(MAX_CONSTANCY_FACTOR, constancy_factor))
+
+    final_score = int(avg_smooth * duration_s * constancy_factor * SCORE_SCALE)
+
+    return {
+        "sample_count": sample_count,
+        "duration_s": duration_s,
+        "avg_speed": avg_speed,
+        "max_speed": max_speed,
+        "avg_smooth": avg_smooth,
+        "max_smooth": max_smooth,
+        "std_smooth": std_smooth,
+        "cv_smooth": cv_smooth,
+        "constancy_factor": constancy_factor,
+        "final_score": final_score,
+    }
 
 
 # =====================================================
@@ -178,12 +333,13 @@ def get_today_ranking_all():
                 continue
 
             try:
-                score = int(float(row.get("live_score", 0)))
-                avg_speed = float(row.get("avg_speed", 0))
-                max_speed = float(row.get("max_speed", 0))
-                avg_smooth = float(row.get("avg_smooth", 0))
-                max_smooth = float(row.get("max_smooth", 0))
-                sample_count = int(float(row.get("sample_count", 0)))
+                score = int(float(row.get("final_score") or row.get("live_score") or 0))
+                avg_speed = float(row.get("avg_speed", 0) or 0)
+                max_speed = float(row.get("max_speed", 0) or 0)
+                avg_smooth = float(row.get("avg_smooth", 0) or 0)
+                max_smooth = float(row.get("max_smooth", 0) or 0)
+                sample_count = int(float(row.get("sample_count", 0) or 0))
+                constancy_factor = float(row.get("constancy_factor", 1) or 1)
             except ValueError:
                 continue
 
@@ -195,6 +351,7 @@ def get_today_ranking_all():
                 "avg_smooth": avg_smooth,
                 "max_smooth": max_smooth,
                 "sample_count": sample_count,
+                "constancy_factor": constancy_factor,
                 "session_id": row.get("session_id", ""),
                 "start_time": start_time,
                 "is_current": False,
@@ -209,10 +366,6 @@ def get_today_ranking_all():
 
 
 def get_live_ranking_window(limit=10):
-    """
-    Ranking para el modo game.
-    Si hay sesión activa, incluye al jugador actual aunque tenga 0 puntos.
-    """
     ranking = get_today_ranking_all()
 
     with state_lock:
@@ -232,6 +385,7 @@ def get_live_ranking_window(limit=10):
             "avg_smooth": 0.0,
             "max_smooth": 0.0,
             "sample_count": 0,
+            "constancy_factor": 0.0,
             "session_id": session_id or "current",
             "start_time": datetime.now().isoformat(),
             "is_current": True,
@@ -251,13 +405,7 @@ def get_live_ranking_window(limit=10):
         if item.get("is_current"):
             current_rank = index
 
-    if not game_active:
-        return {
-            "ranking": ranking[:limit],
-            "current_rank": None,
-        }
-
-    if current_rank is None:
+    if not game_active or current_rank is None:
         return {
             "ranking": ranking[:limit],
             "current_rank": None,
@@ -270,11 +418,7 @@ def get_live_ranking_window(limit=10):
         }
 
     top_items = ranking[:limit - 1]
-    current_item = next(
-        item for item in ranking
-        if item.get("is_current")
-    )
-
+    current_item = next(item for item in ranking if item.get("is_current"))
     visible = top_items + [current_item]
 
     return {
@@ -284,13 +428,6 @@ def get_live_ranking_window(limit=10):
 
 
 def build_result_panel(target_session_id, limit=10):
-    """
-    Construye el panel de resultado final del participante que acaba de jugar.
-    Muestra:
-    - nombre
-    - posición final
-    - hasta 10 posiciones cercanas alrededor de su lugar
-    """
     ranking = get_today_ranking_all()
 
     if not ranking:
@@ -298,6 +435,7 @@ def build_result_panel(target_session_id, limit=10):
             "participant_name": "PARTICIPANTE",
             "rank": None,
             "entries": [],
+            "score": 0,
         }
 
     target_index = None
@@ -454,6 +592,7 @@ def open_session_csv(participant_name):
     current_session["id"] = session_id
     current_session["participant_name"] = participant_name
     current_session["start_time"] = start_time
+    current_session["data_start_time"] = None
     current_session["end_time"] = None
     current_session["csv_path"] = csv_path
     current_session["csv_file_handle"] = file_handle
@@ -463,20 +602,36 @@ def open_session_csv(participant_name):
     return session_id, csv_path
 
 
-def write_session_sample(speed, speed_smooth, live_score):
+def record_session_sample(speed, speed_smooth):
     writer = current_session.get("csv_writer")
 
     if writer is None:
-        return
-
-    start_time = current_session.get("start_time")
-    if start_time is None:
-        return
+        return calculate_session_metrics([])
 
     now = datetime.now()
-    elapsed_ms = int((now - start_time).total_seconds() * 1000)
+
+    if current_session.get("data_start_time") is None:
+        current_session["data_start_time"] = now
+
+    data_start_time = current_session["data_start_time"]
+    elapsed_ms = int((now - data_start_time).total_seconds() * 1000)
 
     participant_name = current_session.get("participant_name", "PARTICIPANTE")
+
+    sample = {
+        "timestamp": now,
+        "elapsed_ms": elapsed_ms,
+        "speed": speed,
+        "speed_smooth": speed_smooth,
+        "live_score": 0,
+    }
+
+    current_session["samples"].append(sample)
+
+    metrics = calculate_session_metrics(current_session["samples"])
+    live_score = metrics["final_score"]
+
+    sample["live_score"] = live_score
 
     writer.writerow([
         now.isoformat(),
@@ -489,41 +644,18 @@ def write_session_sample(speed, speed_smooth, live_score):
 
     current_session["csv_file_handle"].flush()
 
-    current_session["samples"].append({
-        "timestamp": now,
-        "elapsed_ms": elapsed_ms,
-        "speed": speed,
-        "speed_smooth": speed_smooth,
-        "live_score": live_score,
-    })
+    return metrics
 
 
-def summarize_current_session(final_score):
+def summarize_current_session():
     samples = current_session.get("samples", [])
 
     start_time = current_session.get("start_time")
+    data_start_time = current_session.get("data_start_time")
     end_time = datetime.now()
     current_session["end_time"] = end_time
 
-    if start_time:
-        duration_s = (end_time - start_time).total_seconds()
-    else:
-        duration_s = 0.0
-
-    if samples:
-        speeds = [sample["speed"] for sample in samples]
-        smooth_speeds = [sample["speed_smooth"] for sample in samples]
-
-        avg_speed = sum(speeds) / len(speeds)
-        max_speed = max(speeds)
-
-        avg_smooth = sum(smooth_speeds) / len(smooth_speeds)
-        max_smooth = max(smooth_speeds)
-    else:
-        avg_speed = 0.0
-        max_speed = 0.0
-        avg_smooth = 0.0
-        max_smooth = 0.0
+    metrics = calculate_session_metrics(samples)
 
     csv_path = current_session.get("csv_path")
     csv_file = str(csv_path.relative_to(BASE_DIR)) if csv_path else ""
@@ -532,14 +664,19 @@ def summarize_current_session(final_score):
         "session_id": current_session.get("id", ""),
         "participant_name": current_session.get("participant_name", "PARTICIPANTE"),
         "start_time": start_time.isoformat() if start_time else "",
+        "data_start_time": data_start_time.isoformat() if data_start_time else "",
         "end_time": end_time.isoformat(),
-        "duration_s": duration_s,
-        "sample_count": len(samples),
-        "avg_speed": avg_speed,
-        "max_speed": max_speed,
-        "avg_smooth": avg_smooth,
-        "max_smooth": max_smooth,
-        "live_score": final_score,
+        "duration_s": metrics["duration_s"],
+        "sample_count": metrics["sample_count"],
+        "avg_speed": metrics["avg_speed"],
+        "max_speed": metrics["max_speed"],
+        "avg_smooth": metrics["avg_smooth"],
+        "max_smooth": metrics["max_smooth"],
+        "std_smooth": metrics["std_smooth"],
+        "cv_smooth": metrics["cv_smooth"],
+        "constancy_factor": metrics["constancy_factor"],
+        "live_score": metrics["final_score"],
+        "final_score": metrics["final_score"],
         "csv_file": csv_file,
     }
 
@@ -548,27 +685,33 @@ def summarize_current_session(final_score):
 
 def append_summary_csv(summary):
     with SUMMARY_CSV.open("a", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow([
-            summary["session_id"],
-            summary["participant_name"],
-            summary["start_time"],
-            summary["end_time"],
-            f"{summary['duration_s']:.3f}",
-            summary["sample_count"],
-            f"{summary['avg_speed']:.3f}",
-            f"{summary['max_speed']:.3f}",
-            f"{summary['avg_smooth']:.3f}",
-            f"{summary['max_smooth']:.3f}",
-            summary["live_score"],
-            summary["csv_file"],
-        ])
+        writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS)
+        writer.writerow({
+            "session_id": summary["session_id"],
+            "participant_name": summary["participant_name"],
+            "start_time": summary["start_time"],
+            "data_start_time": summary["data_start_time"],
+            "end_time": summary["end_time"],
+            "duration_s": f"{summary['duration_s']:.3f}",
+            "sample_count": summary["sample_count"],
+            "avg_speed": f"{summary['avg_speed']:.3f}",
+            "max_speed": f"{summary['max_speed']:.3f}",
+            "avg_smooth": f"{summary['avg_smooth']:.3f}",
+            "max_smooth": f"{summary['max_smooth']:.3f}",
+            "std_smooth": f"{summary['std_smooth']:.3f}",
+            "cv_smooth": f"{summary['cv_smooth']:.3f}",
+            "constancy_factor": f"{summary['constancy_factor']:.3f}",
+            "live_score": summary["live_score"],
+            "final_score": summary["final_score"],
+            "csv_file": summary["csv_file"],
+        })
 
 
 def reset_current_session():
     current_session["id"] = ""
     current_session["participant_name"] = ""
     current_session["start_time"] = None
+    current_session["data_start_time"] = None
     current_session["end_time"] = None
     current_session["csv_path"] = None
     current_session["samples"] = []
@@ -581,16 +724,12 @@ def reset_current_session():
 # =====================================================
 
 def start_game():
-    global score_accumulator
-
     with state_lock:
         participant_name = state["participant_name"]
 
     session_id, csv_path = open_session_csv(participant_name)
 
     with state_lock:
-        score_accumulator = 0.0
-
         state["speed"] = 0.0
         state["speed_smooth"] = 0.0
         state["score"] = 0
@@ -608,13 +747,11 @@ def start_game():
         state["last_result_panel"] = None
 
     print(f"[SESSION START] {session_id}")
+    print("[INFO] Esperando datos. El ESP32 ahora tarda 7 segundos antes de enviar muestras.")
 
 
 def end_game():
-    with state_lock:
-        final_score = state["score"]
-
-    summary = summarize_current_session(final_score)
+    summary = summarize_current_session()
     append_summary_csv(summary)
     close_current_csv_safely()
 
@@ -623,6 +760,9 @@ def end_game():
     with state_lock:
         state["speed"] = 0.0
         state["speed_smooth"] = 0.0
+
+        state["score"] = summary["final_score"]
+        state["sample_count"] = summary["sample_count"]
 
         state["game_active"] = False
         state["last_event"] = "END"
@@ -637,9 +777,11 @@ def end_game():
     print(
         "[SUMMARY] "
         f"name={summary['participant_name']} "
-        f"score={summary['live_score']} "
+        f"score={summary['final_score']} "
         f"avg={summary['avg_smooth']:.2f} "
-        f"max={summary['max_smooth']:.2f} "
+        f"std={summary['std_smooth']:.2f} "
+        f"cv={summary['cv_smooth']:.3f} "
+        f"constancy={summary['constancy_factor']:.3f} "
         f"samples={summary['sample_count']}"
     )
 
@@ -647,24 +789,19 @@ def end_game():
 
 
 def update_speed(speed, speed_smooth):
-    global score_accumulator
-
     with state_lock:
         if not state["game_active"]:
             return
 
         state["speed"] = speed
         state["speed_smooth"] = speed_smooth
-        state["sample_count"] += 1
-
-        score_accumulator += speed_smooth / SAMPLES_PER_SECOND
-        state["score"] = int(score_accumulator * 10)
-
-        live_score = state["score"]
-
         state["last_event"] = "DATA"
 
-    write_session_sample(speed, speed_smooth, live_score)
+    metrics = record_session_sample(speed, speed_smooth)
+
+    with state_lock:
+        state["sample_count"] = metrics["sample_count"]
+        state["score"] = metrics["final_score"]
 
 
 # =====================================================
@@ -700,6 +837,8 @@ def parse_serial_line(line):
         return
 
     if line.startswith("speed_kmh"):
+        with state_lock:
+            state["last_event"] = "DATA_HEADER"
         return
 
     if line.startswith("#"):
