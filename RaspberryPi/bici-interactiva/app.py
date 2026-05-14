@@ -39,11 +39,6 @@ ROULETTE_TARGET_ANGLES = [45, 135, 225, 315]
 
 
 def recommendation_from_angle(angle):
-    """
-    Convierte el ángulo final de la ruleta en recomendación.
-
-    Ajusta estos rangos si visualmente tu flecha apunta a otro cuadrante.
-    """
     normalized = angle % 360
 
     if 0 <= normalized < 90:
@@ -57,10 +52,6 @@ def recommendation_from_angle(angle):
 
 
 def choose_recommendation():
-    """
-    Elige el ángulo final de la ruleta.
-    La recomendación se deriva del ángulo.
-    """
     final_angle = random.choice(ROULETTE_TARGET_ANGLES)
     recommendation_index = recommendation_from_angle(final_angle)
 
@@ -141,7 +132,6 @@ state = {
     "result_started_at": None,
     "last_result_panel": None,
 
-    # Recomendación elegida por la ruleta
     "recommendation_index": None,
     "recommendation_video": "",
     "roulette_final_angle": 0,
@@ -884,7 +874,6 @@ def end_game():
 
         state["last_summary"] = summary
 
-        # Primero reproduce recomendacionN.mp4.
         state["screen_mode"] = "recommendation"
         state["result_started_at"] = None
         state["last_result_panel"] = result_panel

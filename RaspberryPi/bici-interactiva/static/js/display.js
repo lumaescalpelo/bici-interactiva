@@ -13,6 +13,7 @@ const rouletteWheel = document.getElementById("rouletteWheel");
 
 // RECOMMENDATION UI
 const recommendationScoreText = document.getElementById("recommendationScoreText");
+const recommendationRankText = document.getElementById("recommendationRankText");
 
 // RESULT UI
 const resultName = document.getElementById("resultName");
@@ -23,7 +24,7 @@ const IDLE_VIDEO = "/static/videos/idle.mp4";
 const GAME_VIDEO = "/static/videos/game.mp4";
 
 // Debe coincidir con la espera del ESP32
-const GAME_UI_DELAY_MS = 7000;
+const GAME_UI_DELAY_MS = 7500;
 
 // game.mp4 dura 1 minuto 7 segundos
 const GAME_DURATION_MS = 67000;
@@ -34,10 +35,17 @@ const ROULETTE_STOP_AT_MS = GAME_DURATION_MS - ROULETTE_STOP_BEFORE_END_MS;
 
 // Texto sobre el video de recomendación
 const RECOMMENDATION_SCORE_SHOW_MS = 1500;
-const RECOMMENDATION_SCORE_HIDE_MS = 3000;
+const RECOMMENDATION_SCORE_HIDE_MS = 4500;
 
-// Giro visual
-const ROULETTE_SPINS = 11;
+// Velocidad mínima para considerar que sí está pedaleando
+const ROULETTE_MIN_SPEED_KMH = 0.8;
+
+// Conversión velocidad bicicleta → velocidad angular ruleta
+const ROULETTE_DEG_PER_SEC_PER_KMH = 34;
+const ROULETTE_MAX_DEG_PER_SEC = 1500;
+
+// Giro extra visual para el frenado final
+const ROULETTE_FINAL_SPINS = 5;
 
 let currentMode = "idle";
 let gameUiTimer = null;
@@ -49,6 +57,14 @@ let recommendationHideTimer = null;
 let currentRecommendationVideo = "";
 let currentRouletteFinalAngle = 0;
 let lastFinalScore = 0;
+let lastFinalRank = null;
+
+let currentSpeedSmooth = 0;
+
+let rouletteAnimationFrame = null;
+let rouletteAngle = 0;
+let rouletteLastFrameTime = null;
+let rouletteStopped = false;
 
 
 function formatScore(value) {
@@ -82,10 +98,24 @@ function clearRecommendationTimers() {
 }
 
 
+function stopRouletteAnimationLoop() {
+  if (rouletteAnimationFrame) {
+    cancelAnimationFrame(rouletteAnimationFrame);
+    rouletteAnimationFrame = null;
+  }
+
+  rouletteLastFrameTime = null;
+}
+
+
 function resetRoulette() {
   if (!rouletteWheel) return;
 
-  rouletteWheel.classList.remove("roulette-spinning");
+  stopRouletteAnimationLoop();
+
+  rouletteStopped = false;
+  rouletteAngle = 0;
+
   rouletteWheel.style.transition = "none";
   rouletteWheel.style.transform = "rotate(0deg)";
 
@@ -93,28 +123,64 @@ function resetRoulette() {
 }
 
 
-function startRouletteSpin() {
+function startRouletteMotionLoop() {
   if (!rouletteWheel) return;
 
-  rouletteWheel.classList.remove("roulette-stopped");
-  rouletteWheel.style.transition = "none";
-  rouletteWheel.style.transform = "rotate(0deg)";
-  void rouletteWheel.offsetWidth;
+  stopRouletteAnimationLoop();
 
-  rouletteWheel.classList.add("roulette-spinning");
+  rouletteLastFrameTime = performance.now();
+
+  function frame(now) {
+    if (currentMode !== "game" || rouletteStopped) {
+      rouletteAnimationFrame = null;
+      return;
+    }
+
+    const deltaSeconds = Math.max(0, (now - rouletteLastFrameTime) / 1000);
+    rouletteLastFrameTime = now;
+
+    const speed = Number(currentSpeedSmooth || 0);
+
+    if (speed >= ROULETTE_MIN_SPEED_KMH) {
+      const degreesPerSecond = Math.min(
+        ROULETTE_MAX_DEG_PER_SEC,
+        speed * ROULETTE_DEG_PER_SEC_PER_KMH
+      );
+
+      rouletteAngle = (rouletteAngle + degreesPerSecond * deltaSeconds) % 360;
+
+      rouletteWheel.style.transition = "none";
+      rouletteWheel.style.transform = `rotate(${rouletteAngle}deg)`;
+    }
+
+    rouletteAnimationFrame = requestAnimationFrame(frame);
+  }
+
+  rouletteAnimationFrame = requestAnimationFrame(frame);
 }
 
 
 function stopRouletteAt(angle) {
   if (!rouletteWheel) return;
 
-  rouletteWheel.classList.remove("roulette-spinning");
+  rouletteStopped = true;
+  stopRouletteAnimationLoop();
 
-  const finalAngle = (ROULETTE_SPINS * 360) + Number(angle || 0);
+  const normalizedCurrent = rouletteAngle % 360;
+  const target = Number(angle || 0) % 360;
+
+  let delta = target - normalizedCurrent;
+
+  if (delta < 0) {
+    delta += 360;
+  }
+
+  const finalAngle = rouletteAngle + (ROULETTE_FINAL_SPINS * 360) + delta;
+
+  rouletteAngle = finalAngle;
 
   rouletteWheel.style.transition = "transform 1800ms cubic-bezier(0.12, 0.78, 0.18, 1)";
   rouletteWheel.style.transform = `rotate(${finalAngle}deg)`;
-  rouletteWheel.classList.add("roulette-stopped");
 }
 
 
@@ -127,7 +193,7 @@ function scheduleGameUiAndRoulette() {
   gameUiTimer = setTimeout(() => {
     if (currentMode === "game") {
       body.classList.add("game-ui-visible");
-      startRouletteSpin();
+      startRouletteMotionLoop();
     }
   }, GAME_UI_DELAY_MS);
 
@@ -144,6 +210,7 @@ function playIdle() {
 
   clearGameTimers();
   clearRecommendationTimers();
+  stopRouletteAnimationLoop();
 
   body.classList.remove(
     "game-mode",
@@ -203,6 +270,7 @@ function playRecommendation() {
 
   clearGameTimers();
   clearRecommendationTimers();
+  stopRouletteAnimationLoop();
 
   body.classList.remove(
     "idle-mode",
@@ -228,6 +296,10 @@ function playRecommendation() {
     recommendationScoreText.textContent = `Hiciste ${formatScore(lastFinalScore)} puntos`;
   }
 
+  if (recommendationRankText) {
+    recommendationRankText.textContent = lastFinalRank ? `#${lastFinalRank}` : "#--";
+  }
+
   recommendationShowTimer = setTimeout(() => {
     if (currentMode === "recommendation") {
       body.classList.add("recommendation-score-visible");
@@ -251,6 +323,7 @@ function playResult() {
 
   clearGameTimers();
   clearRecommendationTimers();
+  stopRouletteAnimationLoop();
 
   body.classList.remove(
     "idle-mode",
@@ -311,6 +384,7 @@ function renderResultPanel(panel) {
     resultName.textContent = "PARTICIPANTE";
     resultRank.textContent = "--";
     lastFinalScore = 0;
+    lastFinalRank = null;
     return;
   }
 
@@ -319,6 +393,10 @@ function renderResultPanel(panel) {
 
   if (panel.score !== undefined) {
     lastFinalScore = Number(panel.score || 0);
+  }
+
+  if (panel.rank !== undefined && panel.rank !== null) {
+    lastFinalRank = Number(panel.rank);
   }
 
   const entries = panel.entries || [];
@@ -370,6 +448,8 @@ async function updateStateFromServer() {
     });
 
     const data = await response.json();
+
+    currentSpeedSmooth = Number(data.speed_smooth || data.speed || 0);
 
     gameName.textContent = data.participant_name || "PARTICIPANTE";
     gameScore.textContent = `${formatScore(data.score || 0)} pts`;

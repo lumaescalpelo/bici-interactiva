@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "BebasNeue";
+  src: url("/static/fonts/Bebas_Neue.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -10,7 +18,7 @@ body {
   overflow: hidden;
   width: 100vw;
   height: 100vh;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "BebasNeue", Arial, Helvetica, sans-serif;
 }
 
 :root {
@@ -102,6 +110,7 @@ body.game-mode.game-ui-visible #gameOverlay {
   color: white;
   pointer-events: none;
   transition: opacity 220ms ease;
+  font-family: "BebasNeue", Arial, Helvetica, sans-serif;
 }
 
 #gameNameBox {
@@ -122,7 +131,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 #gameName {
   width: 100%;
   font-size: 21px;
-  font-weight: 900;
+  font-weight: normal;
   line-height: 1.05;
   color: white;
 
@@ -150,7 +159,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 #gameRankPosition {
   font-size: 56px;
-  font-weight: 500;
+  font-weight: normal;
   line-height: 0.92;
   color: white;
   letter-spacing: -1px;
@@ -163,7 +172,7 @@ body.game-mode.game-ui-visible #gameOverlay {
   max-width: 96px;
 
   font-size: 15px;
-  font-weight: 900;
+  font-weight: normal;
   line-height: 1;
   color: white;
   text-align: center;
@@ -202,7 +211,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 
   color: white;
   font-size: 12px;
-  font-weight: 100;
+  font-weight: normal;
   line-height: 1;
 
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.60);
@@ -210,7 +219,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 .nearby-rank {
   text-align: left;
-  font-weight: 1000;
+  font-weight: normal;
 }
 
 .nearby-name {
@@ -221,12 +230,12 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 .nearby-score {
   text-align: right;
-  font-weight: 100;
+  font-weight: normal;
 }
 
 #gameNearbyRankingList li.current-player {
   font-size: 12px;
-  font-weight: 150;
+  font-weight: normal;
 }
 
 /* =========================
@@ -266,20 +275,6 @@ body.game-mode.game-ui-visible #gameOverlay {
   height: auto;
 }
 
-#rouletteWheel.roulette-spinning {
-  animation: rouletteSpin 760ms linear infinite;
-}
-
-@keyframes rouletteSpin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* =========================
    RECOMMENDATION OVERLAY
    ========================= */
@@ -290,6 +285,7 @@ body.game-mode.game-ui-visible #gameOverlay {
   z-index: 20;
   pointer-events: none;
   color: white;
+  font-family: "BebasNeue", Arial, Helvetica, sans-serif;
 }
 
 #recommendationScoreText {
@@ -302,7 +298,7 @@ body.game-mode.game-ui-visible #gameOverlay {
   text-align: center;
 
   font-size: 38px;
-  font-weight: 900;
+  font-weight: normal;
   line-height: 1.05;
 
   color: white;
@@ -315,7 +311,33 @@ body.game-mode.game-ui-visible #gameOverlay {
   transition: opacity 180ms ease;
 }
 
-body.recommendation-mode.recommendation-score-visible #recommendationScoreText {
+#recommendationRankText {
+  position: absolute;
+
+  left: 40px;
+  right: 40px;
+  top: 160px;
+
+  text-align: center;
+
+  font-size: 56px;
+  font-weight: normal;
+  line-height: 0.92;
+
+  color: white;
+  opacity: 0;
+
+  letter-spacing: -1px;
+
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.85),
+    0 0 18px rgba(0, 0, 0, 0.65);
+
+  transition: opacity 180ms ease;
+}
+
+body.recommendation-mode.recommendation-score-visible #recommendationScoreText,
+body.recommendation-mode.recommendation-score-visible #recommendationRankText {
   opacity: 1;
 }
 
@@ -332,6 +354,7 @@ body.recommendation-mode.recommendation-score-visible #recommendationScoreText {
   background-position: center;
   color: #111;
   pointer-events: none;
+  font-family: "BebasNeue", Arial, Helvetica, sans-serif;
 }
 
 #resultNameBox {
@@ -351,7 +374,7 @@ body.recommendation-mode.recommendation-score-visible #recommendationScoreText {
 #resultName {
   width: 100%;
   font-size: 30px;
-  font-weight: 900;
+  font-weight: normal;
   line-height: 1.05;
   color: #0c2230;
 
@@ -374,7 +397,7 @@ body.recommendation-mode.recommendation-score-visible #recommendationScoreText {
 
 #resultRank {
   font-size: 34px;
-  font-weight: 900;
+  font-weight: normal;
   line-height: 1;
   color: #0c2230;
 }
@@ -404,12 +427,13 @@ body.recommendation-mode.recommendation-score-visible #recommendationScoreText {
   min-height: 25px;
 
   font-size: 18px;
+  font-weight: normal;
   line-height: 1.05;
   color: #1d1d1d;
 }
 
 .result-ranking-rank {
-  font-weight: 900;
+  font-weight: normal;
 }
 
 .result-ranking-name {
@@ -420,7 +444,7 @@ body.recommendation-mode.recommendation-score-visible #recommendationScoreText {
 
 .result-ranking-score {
   text-align: right;
-  font-weight: 900;
+  font-weight: normal;
 }
 
 #resultRankingList li.current-player {
