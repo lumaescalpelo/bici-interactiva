@@ -4,6 +4,7 @@ import time
 import csv
 import re
 import math
+import random
 from pathlib import Path
 from datetime import datetime, date
 
@@ -23,6 +24,26 @@ SAMPLES_PER_SECOND = 10
 
 # Tiempo que se mostrará la pantalla de resultados
 RESULT_SCREEN_DURATION_S = 12
+
+
+# =====================================================
+# RULETA / RECOMENDACIONES
+# =====================================================
+
+RECOMMENDATION_COUNT = 4
+
+# Videos que se reproducen después de game.mp4
+RECOMMENDATION_VIDEO_TEMPLATE = "/static/videos/recomendacion{}.mp4"
+
+# Ángulos finales de la ruleta.
+# Ajusta estos valores si la flecha cae en otro cuadrante.
+# Están en grados.
+ROULETTE_STOP_ANGLES = {
+    1: 45,
+    2: 135,
+    3: 225,
+    4: 315,
+}
 
 
 # =====================================================
@@ -103,10 +124,15 @@ state = {
     "session_csv_file": "",
     "last_summary": None,
 
-    # idle | game | result
+    # idle | game | recommendation | result
     "screen_mode": "idle",
     "result_started_at": None,
     "last_result_panel": None,
+
+    # Recomendación elegida por la ruleta
+    "recommendation_index": None,
+    "recommendation_video": "",
+    "roulette_final_angle": 0,
 }
 
 state_lock = threading.Lock()
@@ -216,6 +242,10 @@ def close_current_csv_safely():
 
 
 def refresh_screen_mode_timeout():
+    """
+    Si la pantalla está en modo result y ya pasó el tiempo de exhibición,
+    regresa a idle.
+    """
     with state_lock:
         if state["screen_mode"] != "result":
             return
@@ -229,6 +259,19 @@ def refresh_screen_mode_timeout():
         if elapsed >= RESULT_SCREEN_DURATION_S:
             state["screen_mode"] = "idle"
             state["result_started_at"] = None
+
+
+def choose_recommendation():
+    """
+    Elige una recomendación de 1 a 4 y su ángulo final de ruleta.
+    """
+    recommendation_index = random.randint(1, RECOMMENDATION_COUNT)
+
+    return {
+        "index": recommendation_index,
+        "video": RECOMMENDATION_VIDEO_TEMPLATE.format(recommendation_index),
+        "angle": ROULETTE_STOP_ANGLES.get(recommendation_index, 45),
+    }
 
 
 # =====================================================
@@ -426,6 +469,7 @@ def get_live_ranking_window(limit=10):
         "current_rank": current_rank,
     }
 
+
 def get_live_nearby_ranking(positions_above=2, positions_below=2):
     """
     Devuelve un ranking cercano al participante actual:
@@ -494,6 +538,7 @@ def get_live_nearby_ranking(positions_above=2, positions_below=2):
         "ranking": visible,
         "current_rank": current_index + 1,
     }
+
 
 def build_result_panel(target_session_id, limit=10):
     ranking = get_today_ranking_all()
@@ -626,6 +671,21 @@ def api_ranking():
         "ranking": ranking_data["ranking"],
         "current_rank": ranking_data["current_rank"],
     })
+
+
+@app.route("/api/recommendation-ended", methods=["POST"])
+def api_recommendation_ended():
+    """
+    El frontend llama esto cuando termina recomendacionX.mp4.
+    Entonces pasamos a pantalla de resultado.
+    """
+    with state_lock:
+        if state["screen_mode"] == "recommendation":
+            state["screen_mode"] = "result"
+            state["result_started_at"] = time.time()
+            state["last_event"] = "RECOMMENDATION_END"
+
+    return jsonify({"ok": True})
 
 
 @app.route("/api/name", methods=["POST"])
@@ -804,6 +864,7 @@ def start_game():
         participant_name = state["participant_name"]
 
     session_id, csv_path = open_session_csv(participant_name)
+    recommendation = choose_recommendation()
 
     with state_lock:
         state["speed"] = 0.0
@@ -822,7 +883,17 @@ def start_game():
         state["result_started_at"] = None
         state["last_result_panel"] = None
 
+        state["recommendation_index"] = recommendation["index"]
+        state["recommendation_video"] = recommendation["video"]
+        state["roulette_final_angle"] = recommendation["angle"]
+
     print(f"[SESSION START] {session_id}")
+    print(
+        "[RECOMMENDATION] "
+        f"index={recommendation['index']} "
+        f"video={recommendation['video']} "
+        f"angle={recommendation['angle']}"
+    )
     print("[INFO] Esperando datos. El ESP32 ahora tarda 7 segundos antes de enviar muestras.")
 
 
@@ -845,8 +916,10 @@ def end_game():
 
         state["last_summary"] = summary
 
-        state["screen_mode"] = "result"
-        state["result_started_at"] = time.time()
+        # Ya no brincamos directo a result.
+        # Primero reproducimos recomendacionN.mp4.
+        state["screen_mode"] = "recommendation"
+        state["result_started_at"] = None
         state["last_result_panel"] = result_panel
 
     print(f"[SESSION END] {summary['session_id']}")

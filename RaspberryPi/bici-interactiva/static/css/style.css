@@ -63,6 +63,11 @@ body.game-mode #resultOverlay {
   display: none;
 }
 
+body.recommendation-mode #gameOverlay,
+body.recommendation-mode #resultOverlay {
+  display: none;
+}
+
 body.result-mode #gameOverlay {
   display: none;
 }
@@ -94,7 +99,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 /*
   Recuadro azul / superior izquierdo.
-  En tu imagen corresponde al rectÃ¡ngulo largo superior izquierdo.
+  Ajustado según tu versión actual.
 */
 #gameNameBox {
   position: absolute;
@@ -127,7 +132,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 /*
   Recuadro rojo / superior derecho.
-  PosiciÃ³n grande arriba, puntos abajo.
+  Posición grande arriba, puntos abajo.
 */
 #gameRankBox {
   position: absolute;
@@ -172,8 +177,8 @@ body.game-mode.game-ui-visible #gameOverlay {
 }
 
 /*
-  Recuadro verde / ranking.
-  En tu imagen corresponde al rectÃ¡ngulo grande central.
+  Recuadro verde / ranking cercano.
+  Ajustado según tu versión actual.
 */
 #gameNearbyRankingBox {
   position: absolute;
@@ -227,6 +232,65 @@ body.game-mode.game-ui-visible #gameOverlay {
 #gameNearbyRankingList li.current-player {
   font-size: 12px;
   font-weight: 150;
+}
+
+/* =========================
+   RULETA
+   ========================= */
+
+/*
+  Ajusta estos valores según tu composición final.
+  Está separado para que puedas mover la ruleta sin tocar HTML.
+*/
+#rouletteBox {
+  position: absolute;
+
+  /* Posición inicial sugerida */
+  left: 430px;
+  top: 690px;
+
+  width: 170px;
+  height: 210px;
+
+  pointer-events: none;
+}
+
+#rouletteWheel {
+  position: absolute;
+  left: 0;
+  top: 0;
+
+  width: 142px;
+  height: 142px;
+
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+#rouletteMarker {
+  position: absolute;
+  left: 54px;
+  top: 146px;
+
+  width: 36px;
+  height: auto;
+}
+
+/*
+  Giro continuo mientras avanza la prueba.
+*/
+#rouletteWheel.roulette-spinning {
+  animation: rouletteSpin 760ms linear infinite;
+}
+
+@keyframes rouletteSpin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* =========================

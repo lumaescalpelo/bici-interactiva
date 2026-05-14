@@ -8,6 +8,9 @@ const gameScore = document.getElementById("gameScore");
 const gameRankPosition = document.getElementById("gameRankPosition");
 const gameNearbyRankingList = document.getElementById("gameNearbyRankingList");
 
+// RULETA
+const rouletteWheel = document.getElementById("rouletteWheel");
+
 // RESULT UI
 const resultName = document.getElementById("resultName");
 const resultRank = document.getElementById("resultRank");
@@ -19,8 +22,21 @@ const GAME_VIDEO = "/static/videos/game.mp4";
 // Debe coincidir con la espera del ESP32
 const GAME_UI_DELAY_MS = 7000;
 
+// game.mp4 ahora dura 1 minuto 7 segundos
+const GAME_DURATION_MS = 67000;
+
+// La ruleta se detiene 2 segundos antes de terminar game.mp4
+const ROULETTE_STOP_BEFORE_END_MS = 2000;
+const ROULETTE_STOP_AT_MS = GAME_DURATION_MS - ROULETTE_STOP_BEFORE_END_MS;
+
+// Giro visual
+const ROULETTE_SPINS = 11;
+
 let currentMode = "idle";
 let gameUiTimer = null;
+let rouletteStopTimer = null;
+let currentRecommendationVideo = "";
+let currentRouletteFinalAngle = 0;
 
 
 function formatScore(value) {
@@ -28,30 +44,85 @@ function formatScore(value) {
 }
 
 
-function hideGameUiTemporarily() {
-  body.classList.remove("game-ui-visible");
-
+function clearGameTimers() {
   if (gameUiTimer) {
     clearTimeout(gameUiTimer);
+    gameUiTimer = null;
   }
 
+  if (rouletteStopTimer) {
+    clearTimeout(rouletteStopTimer);
+    rouletteStopTimer = null;
+  }
+}
+
+
+function resetRoulette() {
+  if (!rouletteWheel) return;
+
+  rouletteWheel.classList.remove("roulette-spinning");
+  rouletteWheel.style.transition = "none";
+  rouletteWheel.style.transform = "rotate(0deg)";
+
+  // Fuerza reflow, ese pequeño ritual pagano del navegador.
+  void rouletteWheel.offsetWidth;
+}
+
+
+function startRouletteSpin() {
+  if (!rouletteWheel) return;
+
+  rouletteWheel.classList.remove("roulette-stopped");
+  rouletteWheel.style.transition = "none";
+  rouletteWheel.style.transform = "rotate(0deg)";
+  void rouletteWheel.offsetWidth;
+
+  rouletteWheel.classList.add("roulette-spinning");
+}
+
+
+function stopRouletteAt(angle) {
+  if (!rouletteWheel) return;
+
+  rouletteWheel.classList.remove("roulette-spinning");
+
+  const finalAngle = (ROULETTE_SPINS * 360) + Number(angle || 0);
+
+  rouletteWheel.style.transition = "transform 1800ms cubic-bezier(0.12, 0.78, 0.18, 1)";
+  rouletteWheel.style.transform = `rotate(${finalAngle}deg)`;
+  rouletteWheel.classList.add("roulette-stopped");
+}
+
+
+function scheduleGameUiAndRoulette() {
+  body.classList.remove("game-ui-visible");
+
+  clearGameTimers();
+  resetRoulette();
+
+  // A los 7 segundos aparecen textos y ruleta
   gameUiTimer = setTimeout(() => {
     if (currentMode === "game") {
       body.classList.add("game-ui-visible");
+      startRouletteSpin();
     }
   }, GAME_UI_DELAY_MS);
+
+  // A los 65 segundos desde que empezó game.mp4, la ruleta se detiene.
+  rouletteStopTimer = setTimeout(() => {
+    if (currentMode === "game") {
+      stopRouletteAt(currentRouletteFinalAngle);
+    }
+  }, ROULETTE_STOP_AT_MS);
 }
 
 
 function playIdle() {
   currentMode = "idle";
 
-  if (gameUiTimer) {
-    clearTimeout(gameUiTimer);
-    gameUiTimer = null;
-  }
+  clearGameTimers();
 
-  body.classList.remove("game-mode", "result-mode", "game-ui-visible");
+  body.classList.remove("game-mode", "recommendation-mode", "result-mode", "game-ui-visible");
   body.classList.add("idle-mode");
 
   video.style.display = "block";
@@ -70,7 +141,7 @@ function playIdle() {
 function playGame() {
   currentMode = "game";
 
-  body.classList.remove("idle-mode", "result-mode", "game-ui-visible");
+  body.classList.remove("idle-mode", "recommendation-mode", "result-mode", "game-ui-visible");
   body.classList.add("game-mode");
 
   video.style.display = "block";
@@ -86,19 +157,41 @@ function playGame() {
     console.error("No se pudo reproducir game:", error);
   });
 
-  hideGameUiTemporarily();
+  scheduleGameUiAndRoulette();
+}
+
+
+function playRecommendation() {
+  currentMode = "recommendation";
+
+  clearGameTimers();
+
+  body.classList.remove("idle-mode", "game-mode", "result-mode", "game-ui-visible");
+  body.classList.add("recommendation-mode");
+
+  video.style.display = "block";
+  video.loop = false;
+
+  const src = currentRecommendationVideo || "/static/videos/recomendacion1.mp4";
+
+  if (!video.src.endsWith(src)) {
+    video.src = src;
+  }
+
+  video.currentTime = 0;
+
+  video.play().catch((error) => {
+    console.error("No se pudo reproducir recomendación:", error);
+  });
 }
 
 
 function playResult() {
   currentMode = "result";
 
-  if (gameUiTimer) {
-    clearTimeout(gameUiTimer);
-    gameUiTimer = null;
-  }
+  clearGameTimers();
 
-  body.classList.remove("idle-mode", "game-mode", "game-ui-visible");
+  body.classList.remove("idle-mode", "game-mode", "recommendation-mode", "game-ui-visible");
   body.classList.add("result-mode");
 
   video.pause();
@@ -186,6 +279,18 @@ function renderResultPanel(panel) {
 }
 
 
+async function notifyRecommendationEnded() {
+  try {
+    await fetch("/api/recommendation-ended", {
+      method: "POST",
+      cache: "no-store"
+    });
+  } catch (error) {
+    console.error("No se pudo avisar fin de recomendación:", error);
+  }
+}
+
+
 async function updateStateFromServer() {
   try {
     const response = await fetch("/api/state", {
@@ -203,6 +308,10 @@ async function updateStateFromServer() {
 
     renderNearbyRanking(data.nearby_ranking || []);
 
+    // RULETA / RECOMENDACIÓN
+    currentRecommendationVideo = data.recommendation_video || "";
+    currentRouletteFinalAngle = Number(data.roulette_final_angle || 0);
+
     // RESULT DATA
     renderResultPanel(data.last_result_panel);
 
@@ -210,6 +319,8 @@ async function updateStateFromServer() {
 
     if (serverMode === "game" && currentMode !== "game") {
       playGame();
+    } else if (serverMode === "recommendation" && currentMode !== "recommendation") {
+      playRecommendation();
     } else if (serverMode === "result" && currentMode !== "result") {
       playResult();
     } else if (serverMode === "idle" && currentMode !== "idle") {
@@ -220,6 +331,13 @@ async function updateStateFromServer() {
     console.error("No se pudo leer /api/state", error);
   }
 }
+
+
+video.addEventListener("ended", () => {
+  if (currentMode === "recommendation") {
+    notifyRecommendationEnded();
+  }
+});
 
 
 setInterval(updateStateFromServer, 100);
