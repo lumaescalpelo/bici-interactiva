@@ -453,3 +453,11 @@ body.recommendation-mode.recommendation-score-visible #recommendationRankText {
   padding: 2px 6px;
   margin: 2px -6px;
 }
+
+html,
+body,
+#screen,
+#stage,
+#mainVideo {
+  cursor: none;
+}
