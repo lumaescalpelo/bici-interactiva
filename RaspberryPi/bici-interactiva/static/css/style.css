@@ -94,12 +94,12 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 /*
   Recuadro azul / superior izquierdo.
-  En tu imagen corresponde al rectángulo largo superior izquierdo.
+  En tu imagen corresponde al rectÃ¡ngulo largo superior izquierdo.
 */
 #gameNameBox {
   position: absolute;
-  left: 24px;
-  top: 48px;
+  left: 12px;
+  top: 72px;
   width: 451px;
   height: 83px;
 
@@ -127,13 +127,13 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 /*
   Recuadro rojo / superior derecho.
-  Posición grande arriba, puntos abajo.
+  PosiciÃ³n grande arriba, puntos abajo.
 */
 #gameRankBox {
   position: absolute;
-  left: 506px;
-  top: 32px;
-  width: 98px;
+  left: 472px;
+  top: 64px;
+  width: 120px;
   height: 83px;
 
   display: flex;
@@ -145,8 +145,8 @@ body.game-mode.game-ui-visible #gameOverlay {
 }
 
 #gameRankPosition {
-  font-size: 39px;
-  font-weight: 1000;
+  font-size: 56px;
+  font-weight: 500;
   line-height: 0.92;
   color: white;
   letter-spacing: -1px;
@@ -173,16 +173,16 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 /*
   Recuadro verde / ranking.
-  En tu imagen corresponde al rectángulo grande central.
+  En tu imagen corresponde al rectÃ¡ngulo grande central.
 */
 #gameNearbyRankingBox {
   position: absolute;
-  left: 0px;
-  top: 149px;
-  width: 605px;
-  height: 295px;
+  left: 12px;
+  top: 129px;
+  width: 240px;
+  height: 320px;
 
-  padding: 22px 28px;
+  padding: 2px 22px;
   overflow: hidden;
 }
 
@@ -194,15 +194,15 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 #gameNearbyRankingList li {
   display: grid;
-  grid-template-columns: 48px 1fr 104px;
-  gap: 10px;
+  grid-template-columns: 18px 1fr 18px;
+  gap: 6px;
   align-items: center;
 
-  height: 48px;
+  height: 14px;
 
   color: white;
-  font-size: 25px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 100;
   line-height: 1;
 
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.60);
@@ -221,12 +221,12 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 .nearby-score {
   text-align: right;
-  font-weight: 1000;
+  font-weight: 100;
 }
 
 #gameNearbyRankingList li.current-player {
-  font-size: 31px;
-  font-weight: 1000;
+  font-size: 12px;
+  font-weight: 150;
 }
 
 /* =========================
