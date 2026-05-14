@@ -2,7 +2,7 @@
 Type=Application
 Name=Bici Interactiva
 Comment=Inicia app.py y Chromium kiosk
-Exec=lxterminal -t "Bici Interactiva" -e bash -lc 'cd ~/bici-interactiva && python3 app.py & sleep 3 && chromium-browser --kiosk --password-store=basic --no-first-run --disable-infobars --disable-session-crashed-bubble --autoplay-policy=no-user-gesture-required http://localhost:5000/display; pkill -f "app.py"'
+Exec=lxterminal -t "Bici Interactiva" -e bash -lc 'cd ~/bici-interactiva && python3 app.py & sleep 3 && chromium --kiosk --password-store=basic --no-first-run --disable-infobars --disable-session-crashed-bubble --autoplay-policy=no-user-gesture-required http://localhost:5000/display; pkill -f "app.py"'
 Icon=applications-games
 Terminal=false
 Categories=Utility;

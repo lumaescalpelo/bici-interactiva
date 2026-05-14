@@ -186,7 +186,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 
 #gameNearbyRankingBox {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 129px;
   width: 240px;
   height: 320px;
@@ -210,7 +210,7 @@ body.game-mode.game-ui-visible #gameOverlay {
   height: 14px;
 
   color: white;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: normal;
   line-height: 1;
 
@@ -234,7 +234,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 }
 
 #gameNearbyRankingList li.current-player {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: normal;
 }
 
