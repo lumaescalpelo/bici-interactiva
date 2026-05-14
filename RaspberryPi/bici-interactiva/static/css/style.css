@@ -65,22 +65,22 @@ body.game-mode #resultOverlay {
   display: none;
 }
 
+body.recommendation-mode #recommendationOverlay {
+  display: block;
+}
+
 body.recommendation-mode #gameOverlay,
 body.recommendation-mode #resultOverlay {
   display: none;
 }
 
-body.recommendation-mode #recommendationOverlay {
+body.result-mode #resultOverlay {
   display: block;
 }
 
 body.result-mode #gameOverlay,
 body.result-mode #recommendationOverlay {
   display: none;
-}
-
-body.result-mode #resultOverlay {
-  display: block;
 }
 
 /* La interfaz de juego NO aparece durante los primeros 7 segundos */
@@ -104,10 +104,6 @@ body.game-mode.game-ui-visible #gameOverlay {
   transition: opacity 220ms ease;
 }
 
-/*
-  Recuadro azul / superior izquierdo.
-  Ajustado según tu versión actual.
-*/
 #gameNameBox {
   position: absolute;
   left: 12px;
@@ -137,10 +133,6 @@ body.game-mode.game-ui-visible #gameOverlay {
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
 }
 
-/*
-  Recuadro rojo / superior derecho.
-  Posición grande arriba, puntos abajo.
-*/
 #gameRankBox {
   position: absolute;
   left: 472px;
@@ -183,10 +175,6 @@ body.game-mode.game-ui-visible #gameOverlay {
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
 }
 
-/*
-  Recuadro verde / ranking cercano.
-  Ajustado según tu versión actual.
-*/
 #gameNearbyRankingBox {
   position: absolute;
   left: 12px;
@@ -245,9 +233,6 @@ body.game-mode.game-ui-visible #gameOverlay {
    RULETA
    ========================= */
 
-/*
-  Ajustado según tus cambios actuales.
-*/
 #rouletteBox {
   position: absolute;
 
@@ -281,9 +266,6 @@ body.game-mode.game-ui-visible #gameOverlay {
   height: auto;
 }
 
-/*
-  Giro continuo mientras avanza la prueba.
-*/
 #rouletteWheel.roulette-spinning {
   animation: rouletteSpin 760ms linear infinite;
 }
@@ -305,6 +287,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 #recommendationOverlay {
   position: absolute;
   inset: 0;
+  z-index: 20;
   pointer-events: none;
   color: white;
 }
@@ -312,9 +295,6 @@ body.game-mode.game-ui-visible #gameOverlay {
 #recommendationScoreText {
   position: absolute;
 
-  /*
-    Ajusta estos valores según tu video de recomendación.
-  */
   left: 40px;
   right: 40px;
   top: 90px;
@@ -329,8 +309,8 @@ body.game-mode.game-ui-visible #gameOverlay {
   opacity: 0;
 
   text-shadow:
-    0 0 8px rgba(0, 0, 0, 0.75),
-    0 0 18px rgba(0, 0, 0, 0.55);
+    0 0 8px rgba(0, 0, 0, 0.85),
+    0 0 18px rgba(0, 0, 0, 0.65);
 
   transition: opacity 180ms ease;
 }

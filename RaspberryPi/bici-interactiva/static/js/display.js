@@ -25,7 +25,7 @@ const GAME_VIDEO = "/static/videos/game.mp4";
 // Debe coincidir con la espera del ESP32
 const GAME_UI_DELAY_MS = 7000;
 
-// game.mp4 ahora dura 1 minuto 7 segundos
+// game.mp4 dura 1 minuto 7 segundos
 const GAME_DURATION_MS = 67000;
 
 // La ruleta se detiene 2 segundos antes de terminar game.mp4
@@ -89,7 +89,6 @@ function resetRoulette() {
   rouletteWheel.style.transition = "none";
   rouletteWheel.style.transform = "rotate(0deg)";
 
-  // Fuerza reflow. Sí, el navegador exige pequeños rituales.
   void rouletteWheel.offsetWidth;
 }
 
@@ -125,7 +124,6 @@ function scheduleGameUiAndRoulette() {
   clearGameTimers();
   resetRoulette();
 
-  // A los 7 segundos aparecen textos y ruleta
   gameUiTimer = setTimeout(() => {
     if (currentMode === "game") {
       body.classList.add("game-ui-visible");
@@ -133,7 +131,6 @@ function scheduleGameUiAndRoulette() {
     }
   }, GAME_UI_DELAY_MS);
 
-  // A los 65 segundos desde que empezó game.mp4, la ruleta se detiene.
   rouletteStopTimer = setTimeout(() => {
     if (currentMode === "game") {
       stopRouletteAt(currentRouletteFinalAngle);
@@ -207,9 +204,14 @@ function playRecommendation() {
   clearGameTimers();
   clearRecommendationTimers();
 
-  body.classList.remove("idle-mode", "game-mode", "result-mode", "game-ui-visible");
+  body.classList.remove(
+    "idle-mode",
+    "game-mode",
+    "result-mode",
+    "game-ui-visible",
+    "recommendation-score-visible"
+  );
   body.classList.add("recommendation-mode");
-  body.classList.remove("recommendation-score-visible");
 
   video.style.display = "block";
   video.loop = false;
@@ -308,11 +310,16 @@ function renderResultPanel(panel) {
   if (!panel) {
     resultName.textContent = "PARTICIPANTE";
     resultRank.textContent = "--";
+    lastFinalScore = 0;
     return;
   }
 
   resultName.textContent = panel.participant_name || "PARTICIPANTE";
   resultRank.textContent = panel.rank ? `#${panel.rank}` : "--";
+
+  if (panel.score !== undefined) {
+    lastFinalScore = Number(panel.score || 0);
+  }
 
   const entries = panel.entries || [];
 
@@ -364,7 +371,6 @@ async function updateStateFromServer() {
 
     const data = await response.json();
 
-    // GAME DATA
     gameName.textContent = data.participant_name || "PARTICIPANTE";
     gameScore.textContent = `${formatScore(data.score || 0)} pts`;
 
@@ -373,16 +379,10 @@ async function updateStateFromServer() {
 
     renderNearbyRanking(data.nearby_ranking || []);
 
-    // RULETA / RECOMENDACIÓN
     currentRecommendationVideo = data.recommendation_video || "";
     currentRouletteFinalAngle = Number(data.roulette_final_angle || 0);
 
-    // RESULT DATA
     renderResultPanel(data.last_result_panel);
-
-    if (data.last_result_panel && data.last_result_panel.score !== undefined) {
-      lastFinalScore = Number(data.last_result_panel.score || 0);
-    }
 
     const serverMode = data.screen_mode || "idle";
 

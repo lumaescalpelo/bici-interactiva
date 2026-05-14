@@ -31,8 +31,6 @@ RESULT_SCREEN_DURATION_S = 12
 # =====================================================
 
 RECOMMENDATION_COUNT = 4
-
-# Videos que se reproducen después de game.mp4
 RECOMMENDATION_VIDEO_TEMPLATE = "/static/videos/recomendacion{}.mp4"
 
 # La ruleta termina en uno de estos ángulos.
@@ -45,7 +43,6 @@ def recommendation_from_angle(angle):
     Convierte el ángulo final de la ruleta en recomendación.
 
     Ajusta estos rangos si visualmente tu flecha apunta a otro cuadrante.
-    Normalizamos a 0-359.
     """
     normalized = angle % 360
 
@@ -59,27 +56,29 @@ def recommendation_from_angle(angle):
         return 4
 
 
+def choose_recommendation():
+    """
+    Elige el ángulo final de la ruleta.
+    La recomendación se deriva del ángulo.
+    """
+    final_angle = random.choice(ROULETTE_TARGET_ANGLES)
+    recommendation_index = recommendation_from_angle(final_angle)
+
+    return {
+        "index": recommendation_index,
+        "video": RECOMMENDATION_VIDEO_TEMPLATE.format(recommendation_index),
+        "angle": final_angle,
+    }
+
+
 # =====================================================
 # PUNTAJE
 # =====================================================
 
-# Escala visual del puntaje.
-# Si los puntos quedan muy altos o bajos, ajusta esto.
 SCORE_SCALE = 10.0
-
-# Penalización por inestabilidad.
-# Más alto = castiga más los cambios bruscos.
 CONSTANCY_PENALTY_WEIGHT = 0.85
-
-# Nunca dejamos que la constancia baje de esto.
-# Así una sesión irregular no se va a cero absoluto.
 MIN_CONSTANCY_FACTOR = 0.40
-
-# Tampoco dejamos que pase de 1.
 MAX_CONSTANCY_FACTOR = 1.00
-
-# Ignora valores casi cero para calcular constancia.
-# Esto evita que pequeños ceros iniciales ensucien demasiado.
 MIN_SPEED_FOR_STATS = 0.5
 
 
@@ -153,8 +152,8 @@ state_lock = threading.Lock()
 current_session = {
     "id": "",
     "participant_name": "",
-    "start_time": None,       # momento de START
-    "data_start_time": None,  # primera muestra real
+    "start_time": None,
+    "data_start_time": None,
     "end_time": None,
     "csv_path": None,
     "csv_file_handle": None,
@@ -174,10 +173,6 @@ def ensure_data_dirs():
 
 
 def ensure_summary_schema():
-    """
-    Crea o migra sessions_summary.csv para que tenga las columnas nuevas.
-    Si ya existía con columnas viejas, conserva los datos y rellena lo faltante.
-    """
     if not SUMMARY_CSV.exists():
         with SUMMARY_CSV.open("w", newline="", encoding="utf-8") as file:
             writer = csv.DictWriter(file, fieldnames=SUMMARY_FIELDS)
@@ -200,7 +195,6 @@ def ensure_summary_schema():
         for field in SUMMARY_FIELDS:
             migrated[field] = row.get(field, "")
 
-        # Compatibilidad con archivos anteriores
         if not migrated["final_score"]:
             migrated["final_score"] = row.get("live_score", "0")
 
@@ -255,10 +249,6 @@ def close_current_csv_safely():
 
 
 def refresh_screen_mode_timeout():
-    """
-    Si la pantalla está en modo result y ya pasó el tiempo de exhibición,
-    regresa a idle.
-    """
     with state_lock:
         if state["screen_mode"] != "result":
             return
@@ -274,35 +264,11 @@ def refresh_screen_mode_timeout():
             state["result_started_at"] = None
 
 
-def choose_recommendation():
-    """
-    Elige el ángulo final de la ruleta.
-    La recomendación se deriva del ángulo.
-    """
-    final_angle = random.choice(ROULETTE_TARGET_ANGLES)
-    recommendation_index = recommendation_from_angle(final_angle)
-
-    return {
-        "index": recommendation_index,
-        "video": RECOMMENDATION_VIDEO_TEMPLATE.format(recommendation_index),
-        "angle": final_angle,
-    }
-
-
 # =====================================================
 # CÁLCULO DE PUNTAJE
 # =====================================================
 
 def calculate_session_metrics(samples):
-    """
-    Calcula métricas y puntaje usando velocidad suavizada.
-
-    La constancia se mide con:
-    cv = std / promedio
-
-    Puntaje:
-    avg_smooth * duration_s * constancy_factor * SCORE_SCALE
-    """
     if not samples:
         return {
             "sample_count": 0,
@@ -320,7 +286,6 @@ def calculate_session_metrics(samples):
     speeds = [sample["speed"] for sample in samples]
     smooth_values_all = [sample["speed_smooth"] for sample in samples]
 
-    # Para estadística de constancia ignoramos ruido casi cero.
     smooth_values = [
         value for value in smooth_values_all
         if value >= MIN_SPEED_FOR_STATS
@@ -486,14 +451,6 @@ def get_live_ranking_window(limit=10):
 
 
 def get_live_nearby_ranking(positions_above=2, positions_below=2):
-    """
-    Devuelve un ranking cercano al participante actual:
-    - hasta 2 posiciones arriba
-    - participante actual
-    - hasta 2 posiciones abajo
-
-    Si todavía no hay juego activo, devuelve lista vacía.
-    """
     ranking = get_today_ranking_all()
 
     with state_lock:
@@ -690,10 +647,6 @@ def api_ranking():
 
 @app.route("/api/recommendation-ended", methods=["POST"])
 def api_recommendation_ended():
-    """
-    El frontend llama esto cuando termina recomendacionX.mp4.
-    Entonces pasamos a pantalla de resultado.
-    """
     with state_lock:
         if state["screen_mode"] == "recommendation":
             state["screen_mode"] = "result"
@@ -909,7 +862,7 @@ def start_game():
         f"video={recommendation['video']} "
         f"angle={recommendation['angle']}"
     )
-    print("[INFO] Esperando datos. El ESP32 ahora tarda 7 segundos antes de enviar muestras.")
+    print("[INFO] Esperando datos. El ESP32 tarda 7 segundos antes de enviar muestras.")
 
 
 def end_game():
@@ -931,8 +884,7 @@ def end_game():
 
         state["last_summary"] = summary
 
-        # Ya no brincamos directo a result.
-        # Primero reproducimos recomendacionN.mp4.
+        # Primero reproduce recomendacionN.mp4.
         state["screen_mode"] = "recommendation"
         state["result_started_at"] = None
         state["last_result_panel"] = result_panel
