@@ -11,6 +11,9 @@ const gameNearbyRankingList = document.getElementById("gameNearbyRankingList");
 // RULETA
 const rouletteWheel = document.getElementById("rouletteWheel");
 
+// RECOMMENDATION UI
+const recommendationScoreText = document.getElementById("recommendationScoreText");
+
 // RESULT UI
 const resultName = document.getElementById("resultName");
 const resultRank = document.getElementById("resultRank");
@@ -29,14 +32,23 @@ const GAME_DURATION_MS = 67000;
 const ROULETTE_STOP_BEFORE_END_MS = 2000;
 const ROULETTE_STOP_AT_MS = GAME_DURATION_MS - ROULETTE_STOP_BEFORE_END_MS;
 
+// Texto sobre el video de recomendación
+const RECOMMENDATION_SCORE_SHOW_MS = 1500;
+const RECOMMENDATION_SCORE_HIDE_MS = 3000;
+
 // Giro visual
 const ROULETTE_SPINS = 11;
 
 let currentMode = "idle";
 let gameUiTimer = null;
 let rouletteStopTimer = null;
+
+let recommendationShowTimer = null;
+let recommendationHideTimer = null;
+
 let currentRecommendationVideo = "";
 let currentRouletteFinalAngle = 0;
+let lastFinalScore = 0;
 
 
 function formatScore(value) {
@@ -57,6 +69,19 @@ function clearGameTimers() {
 }
 
 
+function clearRecommendationTimers() {
+  if (recommendationShowTimer) {
+    clearTimeout(recommendationShowTimer);
+    recommendationShowTimer = null;
+  }
+
+  if (recommendationHideTimer) {
+    clearTimeout(recommendationHideTimer);
+    recommendationHideTimer = null;
+  }
+}
+
+
 function resetRoulette() {
   if (!rouletteWheel) return;
 
@@ -64,7 +89,7 @@ function resetRoulette() {
   rouletteWheel.style.transition = "none";
   rouletteWheel.style.transform = "rotate(0deg)";
 
-  // Fuerza reflow, ese pequeño ritual pagano del navegador.
+  // Fuerza reflow. Sí, el navegador exige pequeños rituales.
   void rouletteWheel.offsetWidth;
 }
 
@@ -121,8 +146,15 @@ function playIdle() {
   currentMode = "idle";
 
   clearGameTimers();
+  clearRecommendationTimers();
 
-  body.classList.remove("game-mode", "recommendation-mode", "result-mode", "game-ui-visible");
+  body.classList.remove(
+    "game-mode",
+    "recommendation-mode",
+    "result-mode",
+    "game-ui-visible",
+    "recommendation-score-visible"
+  );
   body.classList.add("idle-mode");
 
   video.style.display = "block";
@@ -141,7 +173,15 @@ function playIdle() {
 function playGame() {
   currentMode = "game";
 
-  body.classList.remove("idle-mode", "recommendation-mode", "result-mode", "game-ui-visible");
+  clearRecommendationTimers();
+
+  body.classList.remove(
+    "idle-mode",
+    "recommendation-mode",
+    "result-mode",
+    "game-ui-visible",
+    "recommendation-score-visible"
+  );
   body.classList.add("game-mode");
 
   video.style.display = "block";
@@ -165,9 +205,11 @@ function playRecommendation() {
   currentMode = "recommendation";
 
   clearGameTimers();
+  clearRecommendationTimers();
 
   body.classList.remove("idle-mode", "game-mode", "result-mode", "game-ui-visible");
   body.classList.add("recommendation-mode");
+  body.classList.remove("recommendation-score-visible");
 
   video.style.display = "block";
   video.loop = false;
@@ -180,6 +222,22 @@ function playRecommendation() {
 
   video.currentTime = 0;
 
+  if (recommendationScoreText) {
+    recommendationScoreText.textContent = `Hiciste ${formatScore(lastFinalScore)} puntos`;
+  }
+
+  recommendationShowTimer = setTimeout(() => {
+    if (currentMode === "recommendation") {
+      body.classList.add("recommendation-score-visible");
+    }
+  }, RECOMMENDATION_SCORE_SHOW_MS);
+
+  recommendationHideTimer = setTimeout(() => {
+    if (currentMode === "recommendation") {
+      body.classList.remove("recommendation-score-visible");
+    }
+  }, RECOMMENDATION_SCORE_HIDE_MS);
+
   video.play().catch((error) => {
     console.error("No se pudo reproducir recomendación:", error);
   });
@@ -190,8 +248,15 @@ function playResult() {
   currentMode = "result";
 
   clearGameTimers();
+  clearRecommendationTimers();
 
-  body.classList.remove("idle-mode", "game-mode", "recommendation-mode", "game-ui-visible");
+  body.classList.remove(
+    "idle-mode",
+    "game-mode",
+    "recommendation-mode",
+    "game-ui-visible",
+    "recommendation-score-visible"
+  );
   body.classList.add("result-mode");
 
   video.pause();
@@ -314,6 +379,10 @@ async function updateStateFromServer() {
 
     // RESULT DATA
     renderResultPanel(data.last_result_panel);
+
+    if (data.last_result_panel && data.last_result_panel.score !== undefined) {
+      lastFinalScore = Number(data.last_result_panel.score || 0);
+    }
 
     const serverMode = data.screen_mode || "idle";
 

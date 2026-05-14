@@ -35,15 +35,28 @@ RECOMMENDATION_COUNT = 4
 # Videos que se reproducen después de game.mp4
 RECOMMENDATION_VIDEO_TEMPLATE = "/static/videos/recomendacion{}.mp4"
 
-# Ángulos finales de la ruleta.
-# Ajusta estos valores si la flecha cae en otro cuadrante.
-# Están en grados.
-ROULETTE_STOP_ANGLES = {
-    1: 45,
-    2: 135,
-    3: 225,
-    4: 315,
-}
+# La ruleta termina en uno de estos ángulos.
+# La recomendación se decide a partir del ángulo final.
+ROULETTE_TARGET_ANGLES = [45, 135, 225, 315]
+
+
+def recommendation_from_angle(angle):
+    """
+    Convierte el ángulo final de la ruleta en recomendación.
+
+    Ajusta estos rangos si visualmente tu flecha apunta a otro cuadrante.
+    Normalizamos a 0-359.
+    """
+    normalized = angle % 360
+
+    if 0 <= normalized < 90:
+        return 1
+    elif 90 <= normalized < 180:
+        return 2
+    elif 180 <= normalized < 270:
+        return 3
+    else:
+        return 4
 
 
 # =====================================================
@@ -263,14 +276,16 @@ def refresh_screen_mode_timeout():
 
 def choose_recommendation():
     """
-    Elige una recomendación de 1 a 4 y su ángulo final de ruleta.
+    Elige el ángulo final de la ruleta.
+    La recomendación se deriva del ángulo.
     """
-    recommendation_index = random.randint(1, RECOMMENDATION_COUNT)
+    final_angle = random.choice(ROULETTE_TARGET_ANGLES)
+    recommendation_index = recommendation_from_angle(final_angle)
 
     return {
         "index": recommendation_index,
         "video": RECOMMENDATION_VIDEO_TEMPLATE.format(recommendation_index),
-        "angle": ROULETTE_STOP_ANGLES.get(recommendation_index, 45),
+        "angle": final_angle,
     }
 
 

@@ -51,6 +51,7 @@ body {
    ========================= */
 
 body.idle-mode #gameOverlay,
+body.idle-mode #recommendationOverlay,
 body.idle-mode #resultOverlay {
   display: none;
 }
@@ -59,6 +60,7 @@ body.game-mode #gameOverlay {
   display: block;
 }
 
+body.game-mode #recommendationOverlay,
 body.game-mode #resultOverlay {
   display: none;
 }
@@ -68,7 +70,12 @@ body.recommendation-mode #resultOverlay {
   display: none;
 }
 
-body.result-mode #gameOverlay {
+body.recommendation-mode #recommendationOverlay {
+  display: block;
+}
+
+body.result-mode #gameOverlay,
+body.result-mode #recommendationOverlay {
   display: none;
 }
 
@@ -137,7 +144,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 #gameRankBox {
   position: absolute;
   left: 472px;
-  top: 64px;
+  top: 48px;
   width: 120px;
   height: 83px;
 
@@ -239,15 +246,13 @@ body.game-mode.game-ui-visible #gameOverlay {
    ========================= */
 
 /*
-  Ajusta estos valores según tu composición final.
-  Está separado para que puedas mover la ruleta sin tocar HTML.
+  Ajustado según tus cambios actuales.
 */
 #rouletteBox {
   position: absolute;
 
-  /* Posición inicial sugerida */
-  left: 430px;
-  top: 690px;
+  left: 480px;
+  top: 180px;
 
   width: 170px;
   height: 210px;
@@ -270,7 +275,7 @@ body.game-mode.game-ui-visible #gameOverlay {
 #rouletteMarker {
   position: absolute;
   left: 54px;
-  top: 146px;
+  top: 0px;
 
   width: 36px;
   height: auto;
@@ -291,6 +296,47 @@ body.game-mode.game-ui-visible #gameOverlay {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* =========================
+   RECOMMENDATION OVERLAY
+   ========================= */
+
+#recommendationOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: white;
+}
+
+#recommendationScoreText {
+  position: absolute;
+
+  /*
+    Ajusta estos valores según tu video de recomendación.
+  */
+  left: 40px;
+  right: 40px;
+  top: 90px;
+
+  text-align: center;
+
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1.05;
+
+  color: white;
+  opacity: 0;
+
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.75),
+    0 0 18px rgba(0, 0, 0, 0.55);
+
+  transition: opacity 180ms ease;
+}
+
+body.recommendation-mode.recommendation-score-visible #recommendationScoreText {
+  opacity: 1;
 }
 
 /* =========================
