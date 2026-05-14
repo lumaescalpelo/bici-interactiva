@@ -14,8 +14,11 @@ const rouletteWheel = document.getElementById("rouletteWheel");
 // RECOMMENDATION UI
 const recommendationScoreText = document.getElementById("recommendationScoreText");
 const recommendationRankText = document.getElementById("recommendationRankText");
+const recommendationRankingList = document.getElementById("recommendationRankingList");
 
 // RESULT UI
+// Ya no se muestra después de recomendación, pero se sigue usando para conservar datos
+// y no andar rompiendo cosas porque sí. Qué concepto tan revolucionario.
 const resultName = document.getElementById("resultName");
 const resultRank = document.getElementById("resultRank");
 const resultRankingList = document.getElementById("resultRankingList");
@@ -24,7 +27,7 @@ const IDLE_VIDEO = "/static/videos/idle.mp4";
 const GAME_VIDEO = "/static/videos/game.mp4";
 
 // Debe coincidir con la espera del ESP32
-const GAME_UI_DELAY_MS = 7500;
+const GAME_UI_DELAY_MS = 7000;
 
 // game.mp4 dura 1 minuto 7 segundos
 const GAME_DURATION_MS = 67000;
@@ -35,7 +38,7 @@ const ROULETTE_STOP_AT_MS = GAME_DURATION_MS - ROULETTE_STOP_BEFORE_END_MS;
 
 // Texto sobre el video de recomendación
 const RECOMMENDATION_SCORE_SHOW_MS = 1500;
-const RECOMMENDATION_SCORE_HIDE_MS = 4500;
+const RECOMMENDATION_SCORE_HIDE_MS = 3000;
 
 // Velocidad mínima para considerar que sí está pedaleando
 const ROULETTE_MIN_SPEED_KMH = 0.8;
@@ -58,6 +61,7 @@ let currentRecommendationVideo = "";
 let currentRouletteFinalAngle = 0;
 let lastFinalScore = 0;
 let lastFinalRank = null;
+let lastResultPanel = null;
 
 let currentSpeedSmooth = 0;
 
@@ -265,6 +269,43 @@ function playGame() {
 }
 
 
+function renderRecommendationRanking(panel) {
+  if (!recommendationRankingList) return;
+
+  recommendationRankingList.innerHTML = "";
+
+  if (!panel || !Array.isArray(panel.entries) || panel.entries.length === 0) {
+    return;
+  }
+
+  panel.entries.forEach((entry) => {
+    const item = document.createElement("li");
+
+    const rank = document.createElement("span");
+    rank.className = "recommendation-ranking-rank";
+    rank.textContent = `${entry.rank}.`;
+
+    const name = document.createElement("span");
+    name.className = "recommendation-ranking-name";
+    name.textContent = entry.participant_name || "PARTICIPANTE";
+
+    const points = document.createElement("span");
+    points.className = "recommendation-ranking-score";
+    points.textContent = formatScore(entry.score);
+
+    item.appendChild(rank);
+    item.appendChild(name);
+    item.appendChild(points);
+
+    if (entry.is_current) {
+      item.classList.add("current-player");
+    }
+
+    recommendationRankingList.appendChild(item);
+  });
+}
+
+
 function playRecommendation() {
   currentMode = "recommendation";
 
@@ -299,6 +340,8 @@ function playRecommendation() {
   if (recommendationRankText) {
     recommendationRankText.textContent = lastFinalRank ? `#${lastFinalRank}` : "#--";
   }
+
+  renderRecommendationRanking(lastResultPanel);
 
   recommendationShowTimer = setTimeout(() => {
     if (currentMode === "recommendation") {
@@ -378,6 +421,8 @@ function renderNearbyRanking(ranking) {
 
 
 function renderResultPanel(panel) {
+  lastResultPanel = panel;
+
   resultRankingList.innerHTML = "";
 
   if (!panel) {

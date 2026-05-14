@@ -23,6 +23,8 @@ SERIAL_BAUD = 19200
 SAMPLES_PER_SECOND = 10
 
 # Tiempo que se mostrará la pantalla de resultados
+# Ya no se usa en el flujo normal, porque después de recomendación volvemos a idle.
+# Lo dejo por si después quieres reactivar resultOverlay sin rearmar media humanidad.
 RESULT_SCREEN_DURATION_S = 12
 
 
@@ -637,11 +639,15 @@ def api_ranking():
 
 @app.route("/api/recommendation-ended", methods=["POST"])
 def api_recommendation_ended():
+    """
+    Cuando termina recomendacionN.mp4, regresamos directo a idle.
+    Ya no mostramos resultOverlay después de la recomendación.
+    """
     with state_lock:
         if state["screen_mode"] == "recommendation":
-            state["screen_mode"] = "result"
-            state["result_started_at"] = time.time()
-            state["last_event"] = "RECOMMENDATION_END"
+            state["screen_mode"] = "idle"
+            state["result_started_at"] = None
+            state["last_event"] = "RECOMMENDATION_END_IDLE"
 
     return jsonify({"ok": True})
 
@@ -874,6 +880,10 @@ def end_game():
 
         state["last_summary"] = summary
 
+        # Se reproduce recomendacionN.mp4.
+        # El ranking pequeño se muestra dentro de recommendationOverlay.
+        # Al terminar la recomendación, el frontend llama /api/recommendation-ended
+        # y volvemos directo a idle.
         state["screen_mode"] = "recommendation"
         state["result_started_at"] = None
         state["last_result_panel"] = result_panel
